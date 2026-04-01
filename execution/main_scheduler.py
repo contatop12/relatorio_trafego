@@ -17,9 +17,14 @@ import pytz
 # Adiciona o diretório raiz ao path para imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from execution.meta_client import get_meta_client, list_business_ad_accounts
+from execution.meta_client import get_meta_client, list_business_ad_accounts, MetaAPIAuthError
 from execution.evolution_client import get_evolution_client
 from execution.data_processor import DataProcessor, format_currency, format_number
+from execution.webhook_notify import (
+    notify_erro_automacao,
+    notify_exception_as_automation_error,
+    notify_meta_token_expirado,
+)
 
 # Configuração de logging
 log_dir = os.path.join(os.path.dirname(__file__), '..', '.tmp')
@@ -40,14 +45,14 @@ logger = logging.getLogger(__name__)
 class NextNousReporter:
     """
     Classe principal para geração e envio de relatórios Next Nous.
-    
-    Persona: Fusão entre eficiência analítica (Jarvis) e sobriedade (Alfred).
-    Tom: Formal, minimalista, preciso e levemente irônico.
-    Formatação: Apenas Markdown (negrito, listas). Sem emojis.
+
+    Mensagens ao cliente: texto curto, direto, com data e métricas (negrito estilo WhatsApp).
     """
     
     def __init__(self):
         """Inicializa o reporter Next Nous."""
+        self._webhook_token_expiry_sent = False
+        self._webhook_meta_auth_other_sent = False
         try:
             self.access_token = os.getenv('META_ACCESS_TOKEN')
             if not self.access_token:
@@ -98,6 +103,39 @@ class NextNousReporter:
         
         return period_a_start, period_a_end, period_b_start, period_b_end
     
+    def _notify_meta_auth_webhook(self, e: MetaAPIAuthError, cliente: Optional[str] = None) -> None:
+        """Envia webhook de token expirado ou erro de auth Meta (no máximo um de cada tipo por execução)."""
+        if e.is_token_expiry_event:
+            if self._webhook_token_expiry_sent:
+                return
+            self._webhook_token_expiry_sent = True
+            descricao = (
+                "A Meta Marketing API indicou expiração ou invalidação da sessão do access token. "
+                "Renovar META_ACCESS_TOKEN (Meta Business / Graph API Explorer). "
+                f"Detalhe: código {e.error_code}, subcódigo {e.error_subcode}: {e}"
+            )
+            notify_meta_token_expirado(
+                descricao,
+                meta_error_code=e.error_code,
+                meta_error_subcode=e.error_subcode,
+                cliente=cliente,
+                fbtrace_id=e.fbtrace_id,
+            )
+        else:
+            if self._webhook_meta_auth_other_sent:
+                return
+            self._webhook_meta_auth_other_sent = True
+            descricao = (
+                "Falha de autenticação na Meta (token ou permissões) sem indício explícito de expiração de sessão. "
+                f"Cliente: {cliente or 'N/A'}. Detalhe: {e}"
+            )
+            notify_erro_automacao(
+                descricao,
+                tipo_excecao="MetaAPIAuthError",
+                mensagem=str(e),
+                cliente=cliente,
+            )
+    
     def _detect_conversion_types(self, insights: List[Dict[str, Any]], ads: List[Dict[str, Any]]) -> List[str]:
         """
         Detecta quais tipos de conversão existem nos dados.
@@ -139,111 +177,98 @@ class NextNousReporter:
         
         return sorted(list(conversion_types))  # Retorna ordenado
     
-    def format_absolute_report(self, metrics: Dict[str, float], account_name: str = "", conversion_types: List[str] = None) -> str:
+    @staticmethod
+    def _date_iso_to_br(iso_date: str) -> str:
+        """Converte YYYY-MM-DD para DD/MM/AAAA."""
+        try:
+            d = datetime.strptime(iso_date, "%Y-%m-%d").date()
+            return d.strftime("%d/%m/%Y")
+        except (ValueError, TypeError):
+            return iso_date
+    
+    def format_absolute_report(
+        self,
+        metrics: Dict[str, float],
+        reference_date: str,
+        account_name: str = "",
+        conversion_types: Optional[List[str]] = None,
+    ) -> str:
         """
-        Formata relatório de performance absoluta - Protocolo de Vigilância (tom real/cortesão).
-        
-        Args:
-            metrics: Métricas agregadas do período
-            account_name: Nome do cliente (opcional)
-            conversion_types: Lista de tipos de conversão encontrados ['Lead', 'WhatsApp'] (opcional)
-            
-        Returns:
-            Mensagem formatada no estilo real/cortesão com humor
+        Relatório do dia (período A): título, data e linhas de métricas.
         """
-        report = "👑 PROTOCOLO DE VIGILÂNCIA"
         if account_name:
-            report += f": {account_name}"
-        report += "\n\n"
+            report = f"*Relatório — {account_name}*\n"
+        else:
+            report = "*Relatório Meta Ads*\n"
+        report += f"📅 Data: {self._date_iso_to_br(reference_date)}\n\n"
         
-        report += "Caros membros da corte, os escribas reais completaram o levantamento dos tesouros do dia anterior. Eis os resultados consolidados:\n\n"
+        report += f"💰 Investimento: {format_currency(metrics['spend'])}\n"
+        report += f"👁️ Impressões: {format_number(metrics['impressions'])}\n"
+        report += f"🖱️ Cliques: {format_number(metrics['clicks'])}\n"
+        report += f"💸 CPC: {format_currency(metrics['cpc'])}\n"
         
-        report += f"💰 Investimento: `{format_currency(metrics['spend'])}`\n"
-        report += f"👁️ Alcance Visual: `{format_number(metrics['impressions'])}` impressões\n"
-        report += f"🖱️ Engajamento: `{format_number(metrics['clicks'])}` cliques\n"
-        report += f"💸 Custo p/ Clique: `{format_currency(metrics['cpc'])}`\n"
-        
-        # Formata tipos de conversão
         if conversion_types:
             if len(conversion_types) == 2:
-                conversion_label = "(Lead + WhatsApp)"
+                conversion_label = "Lead + WhatsApp"
             elif len(conversion_types) == 1:
-                conversion_label = f"({conversion_types[0]})"
+                conversion_label = conversion_types[0]
             else:
-                conversion_label = "(Lead + WhatsApp)"  # Padrão
+                conversion_label = "Lead + WhatsApp"
         else:
-            conversion_label = "(Lead + WhatsApp)"  # Padrão
+            conversion_label = "Lead + WhatsApp"
         
-        report += f"🎯 Alvos Convertidos: `{format_number(metrics['conversions'])}` {conversion_label}\n"
-        report += f"📉 Custo p/ Alvo (CPA): `{format_currency(metrics['cpa'])}`\n"
-        
-        report += "\n🖥️ Os livros foram revisados. A integridade dos registros está confirmada."
+        report += f"🎯 Conversões ({conversion_label}): {format_number(metrics['conversions'])}\n"
+        report += f"📉 CPA: {format_currency(metrics['cpa'])}\n"
         
         return report
     
     def format_comparative_report(
         self,
-        metrics_a: Dict[str, float],
-        metrics_b: Dict[str, float],
+        _metrics_a: Dict[str, float],
+        _metrics_b: Dict[str, float],
         deltas: Dict[str, str],
         champion: Dict[str, Any] | None,
-        account_name: str = ""
+        date_a: str,
+        date_b: str,
+        account_name: str = "",
     ) -> str:
         """
-        Formata relatório comparativo - Análise Tática.
-        
-        Args:
-            metrics_a: Métricas do período atual
-            metrics_b: Métricas do período comparativo
-            deltas: Variações percentuais (strings formatadas)
-            champion: Informações do criativo campeão
-            account_name: Nome do cliente (opcional, não usado)
-            
-        Returns:
-            Mensagem formatada no estilo Batman/Next Nous
+        Comparativo entre o dia de referência (date_a) e o dia anterior (date_b).
+        (_metrics_a/_metrics_b reservados para evoluções que precisem dos valores absolutos.)
         """
         def get_delta_emoji(delta_str: str) -> str:
-            """Retorna emoji baseado no sinal da variação."""
             if delta_str == "Novo Volume" or delta_str.startswith("+"):
                 return "📈"
-            else:
-                return "📉"
+            return "📉"
         
-        report = "🖥️ ANÁLISE TÁTICA: RELATÓRIO DA CORTE\n\n"
-        report += "Comparando com o dia anterior, nossos conselheiros identificaram os seguintes movimentos no reino:\n\n"
+        if account_name:
+            report = f"*Comparativo — {account_name}*\n"
+        else:
+            report = "*Comparativo*\n"
+        report += (
+            f"📅 {self._date_iso_to_br(date_a)} vs {self._date_iso_to_br(date_b)}\n\n"
+        )
         
-        # Investimento
-        delta_spend = deltas['spend']
-        report += f"📊 Investimento: `{delta_spend}` {get_delta_emoji(delta_spend)}\n"
+        delta_spend = deltas["spend"]
+        report += f"📊 Investimento: {delta_spend} {get_delta_emoji(delta_spend)}\n"
         
-        # Cliques
-        delta_clicks = deltas['clicks']
-        report += f"🖱️ Cliques: `{delta_clicks}` {get_delta_emoji(delta_clicks)}\n"
+        delta_clicks = deltas["clicks"]
+        report += f"🖱️ Cliques: {delta_clicks} {get_delta_emoji(delta_clicks)}\n"
         
-        # Conversões
-        delta_conversions = deltas['conversions']
-        report += f"🎯 Conversões: `{delta_conversions}` {get_delta_emoji(delta_conversions)}\n"
+        delta_conversions = deltas["conversions"]
+        report += f"🎯 Conversões: {delta_conversions} {get_delta_emoji(delta_conversions)}\n"
         
-        # CPA (com lógica especial para redução de custo)
-        delta_cpa = deltas['cpa']
-        cpa_emoji = get_delta_emoji(delta_cpa)
-        cpa_comment = ""
-        # Para CPA, negativo (redução) é bom, positivo (aumento) é ruim
-        if delta_cpa != "Novo Volume" and delta_cpa.startswith("-"):
-            cpa_comment = " (Excelente economia, Vossa Excelência)"
-        report += f"💸 CPA: `{delta_cpa}` {cpa_emoji}{cpa_comment}\n"
+        delta_cpa = deltas["cpa"]
+        report += f"💸 CPA: {delta_cpa} {get_delta_emoji(delta_cpa)}\n"
         
-        # TOP CREATIVE
         report += "\n"
         if champion:
-            report += f"🎯 DESTAQUE DA CORTE (TOP CREATIVE):\n"
-            report += f"🏷️ Criativo: `{champion['ad_name']}`\n"
-            report += f"📁 Conjunto: `{champion['adset_name']}`\n"
-            report += f"📁 Campanha: `{champion['campaign_name']}`\n"
+            report += "🎯 Top criativo\n"
+            report += f"🏷️ Criativo: {champion['ad_name']}\n"
+            report += f"📁 Conjunto: {champion['adset_name']}\n"
+            report += f"📁 Campanha: {champion['campaign_name']}\n"
         else:
-            report += "🎯 DESTAQUE DA CORTE (TOP CREATIVE): Nenhum anúncio com conversões identificado.\n"
-        
-        report += "\n👑 A vigilância continua. Próxima inspeção em 24 horas."
+            report += "🎯 Top criativo: nenhum com conversão no período.\n"
         
         return report
     
@@ -298,13 +323,20 @@ class NextNousReporter:
             conversion_types = self._detect_conversion_types(period_a_insights, period_a_ads)
             
             # Formata mensagens
-            message_1 = self.format_absolute_report(results['period_a'], client_name, conversion_types)
+            message_1 = self.format_absolute_report(
+                results["period_a"],
+                period_a_start,
+                client_name,
+                conversion_types,
+            )
             message_2 = self.format_comparative_report(
-                results['period_a'],
-                results['period_b'],
-                results['deltas'],
-                results['champion'],
-                client_name
+                results["period_a"],
+                results["period_b"],
+                results["deltas"],
+                results["champion"],
+                period_a_start,
+                period_b_start,
+                client_name,
             )
             
             # Modo DRY_RUN: salva em arquivo ao invés de enviar
@@ -342,11 +374,25 @@ class NextNousReporter:
                 logger.error(f"Falha ao enviar primeira mensagem do relatório para {client_name}")
                 return False
                 
+        except MetaAPIAuthError as e:
+            logger.error(f"Erro de autenticação Meta para {client_name}: {str(e)}")
+            self._notify_meta_auth_webhook(e, cliente=client_name)
+            return False
         except ValueError as e:
-            logger.error(f"Erro de autenticação para {client_name}: {str(e)}")
+            logger.error(f"Erro de validação para {client_name}: {str(e)}")
+            notify_exception_as_automation_error(
+                e,
+                f"Erro de validação ao gerar relatório para o cliente {client_name}.",
+                cliente=client_name,
+            )
             return False
         except Exception as e:
             logger.error(f"Erro ao gerar relatório para {client_name}: {str(e)}", exc_info=True)
+            notify_exception_as_automation_error(
+                e,
+                f"Erro ao gerar ou enviar relatório para o cliente {client_name}.",
+                cliente=client_name,
+            )
             return False
     
     def load_clients_config(self) -> List[Dict[str, Any]]:
@@ -397,7 +443,14 @@ class NextNousReporter:
             # Busca todas as contas de anúncios do Business
             logger.info("Buscando contas de anúncios do Business...")
             max_retries = int(os.getenv('MAX_RETRIES', '3'))
-            business_accounts = list_business_ad_accounts(self.access_token, self.business_id, max_retries)
+            try:
+                business_accounts = list_business_ad_accounts(
+                    self.access_token, self.business_id, max_retries
+                )
+            except MetaAPIAuthError as e:
+                logger.error(f"Erro de autenticação Meta ao listar contas do Business: {e}")
+                self._notify_meta_auth_webhook(e, cliente=None)
+                return False
             
             if not business_accounts:
                 logger.warning("Nenhuma conta de anúncios encontrada no Business")
@@ -477,6 +530,11 @@ class NextNousReporter:
                         failed_count += 1
                 except Exception as e:
                     logger.error(f"Erro ao processar cliente {client_name}: {str(e)}", exc_info=True)
+                    notify_exception_as_automation_error(
+                        e,
+                        f"Erro inesperado ao processar o cliente {client_name} no loop principal.",
+                        cliente=client_name,
+                    )
                     failed_count += 1
                     # Continua para o próximo cliente (falha isolada)
                     continue
@@ -498,9 +556,17 @@ class NextNousReporter:
                 
         except FileNotFoundError as e:
             logger.error(f"Erro ao carregar configuração: {str(e)}")
+            notify_exception_as_automation_error(
+                e,
+                "Arquivo de configuração necessário não encontrado (clients.json ou path inválido).",
+            )
             return False
         except Exception as e:
             logger.error(f"Erro ao gerar relatórios: {str(e)}", exc_info=True)
+            notify_exception_as_automation_error(
+                e,
+                "Erro inesperado durante generate_and_send_report (após inicialização).",
+            )
             return False
 
 
@@ -524,6 +590,10 @@ def main():
             
     except Exception as e:
         logger.error(f"Erro fatal na execução: {str(e)}", exc_info=True)
+        notify_exception_as_automation_error(
+            e,
+            "Erro fatal na execução do main_scheduler (antes de concluir ou fora do fluxo normal).",
+        )
         sys.exit(1)
 
 

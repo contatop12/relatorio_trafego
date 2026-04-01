@@ -27,6 +27,59 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _is_token_expiry_indication(
+    error_code: Any,
+    error_subcode: Optional[int],
+    message: str,
+) -> bool:
+    """Indícios na resposta Graph API de sessão/token expirado ou invalidado."""
+    msg = (message or "").lower()
+    if error_subcode in (463, 460):
+        return True
+    if "expired" in msg or "session has expired" in msg:
+        return True
+    if "error validating access token" in msg:
+        return True
+    return False
+
+
+class MetaAPIAuthError(ValueError):
+    """Falha de credencial na Meta Graph API (códigos 190/200 típicos)."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        error_code: Any = None,
+        error_subcode: Optional[int] = None,
+        fbtrace_id: Optional[str] = None,
+        api_message: str = "",
+    ) -> None:
+        super().__init__(message)
+        self.error_code = error_code
+        self.error_subcode = error_subcode
+        self.fbtrace_id = fbtrace_id
+        self.is_token_expiry_event = _is_token_expiry_indication(
+            error_code, error_subcode, api_message or message
+        )
+
+
+def meta_api_auth_error_from_graph(error: Dict[str, Any]) -> MetaAPIAuthError:
+    """Constrói MetaAPIAuthError a partir do objeto error do JSON da Graph API."""
+    error_message = error.get("message", "Unknown error")
+    error_code = error.get("code", "UNKNOWN")
+    raw_sub = error.get("error_subcode")
+    error_subcode = int(raw_sub) if raw_sub is not None else None
+    fbtrace_id = error.get("fbtrace_id")
+    return MetaAPIAuthError(
+        f"Falha de autenticação Meta API: {error_message}",
+        error_code=error_code,
+        error_subcode=error_subcode,
+        fbtrace_id=fbtrace_id,
+        api_message=error_message,
+    )
+
+
 class MetaAPIClient:
     """Cliente para interação com Meta Marketing API."""
     
@@ -58,7 +111,7 @@ class MetaAPIClient:
             
         Raises:
             requests.RequestException: Em caso de erro na requisição após todas as tentativas
-            ValueError: Em caso de erro de autenticação
+            MetaAPIAuthError: Em caso de erro de autenticação na resposta JSON
         """
         params['access_token'] = self.access_token
         url = f"{self.BASE_URL}/{endpoint}"
@@ -78,7 +131,7 @@ class MetaAPIClient:
                     # Erro de autenticação (código 190 ou 200)
                     if error_code in [190, 200]:
                         logger.error(f"Erro de autenticação Meta API: {error_message}")
-                        raise ValueError(f"Falha de autenticação Meta API: {error_message}")
+                        raise meta_api_auth_error_from_graph(error)
                     
                     # Outros erros
                     logger.warning(f"Erro Meta API (tentativa {attempt}/{self.max_retries}): {error_message}")
@@ -266,7 +319,7 @@ def list_business_ad_accounts(access_token: str, business_id: str, max_retries: 
                     
                     if error_code in [190, 200]:
                         logger.error(f"Erro de autenticação ao buscar contas ({endpoint_path}): {error_message}")
-                        raise ValueError(f"Falha de autenticação: {error_message}")
+                        raise meta_api_auth_error_from_graph(error)
                     
                     # Se erro não for de autenticação, retorna lista vazia (endpoint pode não existir)
                     logger.warning(f"Erro ao buscar contas ({endpoint_path}): {error_message}")
@@ -292,12 +345,15 @@ def list_business_ad_accounts(access_token: str, business_id: str, max_retries: 
                     response = requests.get(next_url, timeout=30)
                     response.raise_for_status()
                     data = response.json()
+                    if "error" in data:
+                        err = data["error"]
+                        if err.get("code") in [190, 200]:
+                            raise meta_api_auth_error_from_graph(err)
                     time.sleep(1)
                 
                 break
                 
-            except ValueError:
-                # Erro de autenticação, propaga
+            except MetaAPIAuthError:
                 raise
             except requests.RequestException as e:
                 if attempt < max_retries:
@@ -372,7 +428,7 @@ def get_ad_accounts_from_portfolio(access_token: str, portfolio_id: str, max_ret
                 
                 if error_code in [190, 200]:
                     logger.error(f"Erro de autenticação ao buscar contas: {error_message}")
-                    raise ValueError(f"Falha de autenticação: {error_message}")
+                    raise meta_api_auth_error_from_graph(error)
                 
                 # Se não encontrar, tenta como Business ID direto
                 if attempt < max_retries:
@@ -404,10 +460,16 @@ def get_ad_accounts_from_portfolio(access_token: str, portfolio_id: str, max_ret
                 response = requests.get(next_url, timeout=30)
                 response.raise_for_status()
                 data = response.json()
+                if "error" in data:
+                    err = data["error"]
+                    if err.get("code") in [190, 200]:
+                        raise meta_api_auth_error_from_graph(err)
                 time.sleep(1)
             
             break
             
+        except MetaAPIAuthError:
+            raise
         except requests.RequestException as e:
             if attempt < max_retries:
                 logger.warning(f"Erro ao buscar contas (tentativa {attempt}/{max_retries}): {str(e)}")
