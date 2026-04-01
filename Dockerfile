@@ -20,10 +20,13 @@ COPY . .
 # Cria pasta de logs com permissões corretas
 RUN mkdir -p .tmp && chmod 755 .tmp
 
-# Configura o Cron para execução diária às 10:00 AM (horário de São Paulo)
+RUN chmod +x scripts/cron_daily_report.sh
+
+# Cron diario 10:00 (fuso do container; TZ=America/Sao_Paulo no Dockerfile).
+# Job chama script que escreve blocos legiveis em .tmp/cron.log.
 RUN echo 'SHELL=/bin/sh' > /etc/crontabs/root \
     && echo 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin' >> /etc/crontabs/root \
-    && echo '0 10 * * * cd /app && python execution/main_scheduler.py >> /app/.tmp/cron.log 2>&1' >> /etc/crontabs/root
+    && echo '0 10 * * * /app/scripts/cron_daily_report.sh' >> /etc/crontabs/root
 
 # Torna o entrypoint executável
 # O entrypoint.sh sincroniza variáveis de ambiente do Easypanel para .env,

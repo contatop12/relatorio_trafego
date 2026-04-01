@@ -25,5 +25,9 @@ mkdir -p /app/.tmp
 touch /app/.tmp/cron.log
 
 # 4. Inicia o daemon do cron em foreground
-echo "Next Nous: Iniciando agendamento (Cron)..."
-exec /usr/sbin/crond -f -l 2 -L /dev/stdout
+# -l 8 = log minimo do busybox crond (evita "wakeup dt=60" e dump da crontab a cada minuto no stdout)
+# Saida interna do crond vai para .tmp/crond.log; cada execucao do job detalha em .tmp/cron.log
+echo "Next Nous: Iniciando agendamento (Cron diario 10:00 TZ do container)..."
+echo "Next Nous: Logs do job: /app/.tmp/cron.log | daemon crond: /app/.tmp/crond.log"
+touch /app/.tmp/crond.log
+exec /usr/sbin/crond -f -l 8 -L /app/.tmp/crond.log

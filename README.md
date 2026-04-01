@@ -111,7 +111,10 @@ No **Easypanel** (ou similar):
 1. Defina variáveis de ambiente equivalentes ao `.env` (o [`entrypoint.sh`](entrypoint.sh) gera `/app/.env` a partir delas se não houver arquivo montado).
 2. Garanta **`META_BUSINESS_ID`** e **`META_ACCESS_TOKEN`** — sem Business ID o fluxo multi-client do cron aborta.
 3. Para **incluir cliente novo**: edite `clients.json`, faça commit/deploy de nova imagem **ou** monte um volume só em `/app/clients.json` para mudar sem rebuild.
-4. Logs: `.tmp/execution.log` e `.tmp/cron.log` dentro do container.
+4. Logs no container:
+   - **`.tmp/cron.log`** — saída do `main_scheduler` e blocos `INICIO`/`FIM` com horário UTC e `exit_code` (gerado por `scripts/cron_daily_report.sh`).
+   - **`.tmp/execution.log`** — logging do Python (handlers do app).
+   - **`.tmp/crond.log`** — mensagens mínimas do daemon `crond` (BusyBox); o stdout do container fica limpo (sem `wakeup dt=60` a cada minuto).
 
 ### 4. Modo DRY_RUN
 Para testar sem enviar WhatsApp, configure `DRY_RUN=true` no `.env`. Os relatórios serão salvos em `.tmp/report_<ad_account_id>.md`.
