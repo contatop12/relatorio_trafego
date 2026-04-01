@@ -26,9 +26,9 @@ TZ=America/Sao_Paulo
 # 3. O arquivo .env está no .gitignore por segurança
 # 
 # IMPORTANTE - Modo Multi-Client:
-# - META_BUSINESS_ID: ID do Business Manager (empresa no Meta Business)
-#   O sistema usará este ID para listar todas as contas de anúncios do Business
-# - Configure os clientes no arquivo clients.json na raiz do projeto
-#   Cada cliente deve ter: client_name, ad_account_id, group_id (WhatsApp), enabled
-# - META_AD_ACCOUNT_ID não é mais obrigatório (uso individual)
-# - EVOLUTION_GROUP_ID não é mais obrigatório (vem por cliente no clients.json)
+# - META_BUSINESS_ID: ID do Business Manager (obrigatório para o cron principal:
+#   execution/main_scheduler.py lista contas do Business e cruza com clients.json)
+# - Novas contas de anúncio + grupos WhatsApp: edite clients.json na RAIZ do repo
+#   (um objeto por cliente: client_name, ad_account_id, group_id, enabled)
+# - No Docker/Easypanel: clients.json vai na imagem (git) ou monte um volume em /app/clients.json
+# - META_AD_ACCOUNT_ID / EVOLUTION_GROUP_ID: opcionais (scripts manuais e testes)

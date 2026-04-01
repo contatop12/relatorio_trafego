@@ -10,9 +10,8 @@ import sys
 import json
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List, Optional
-import pytz
 
 # Adiciona o diretório raiz ao path para imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -58,9 +57,12 @@ class NextNousReporter:
             if not self.access_token:
                 raise ValueError("META_ACCESS_TOKEN não configurada no .env")
             
-            self.business_id = os.getenv('META_BUSINESS_ID')
+            self.business_id = (os.getenv('META_BUSINESS_ID') or '').strip()
             if not self.business_id:
-                raise ValueError("META_BUSINESS_ID não configurada no .env")
+                logger.warning(
+                    "META_BUSINESS_ID ausente no .env: generate_and_send_report() multi-client "
+                    "nao funcionara; generate_and_send_report_for_client() continua disponivel."
+                )
             
             self.evolution_client = get_evolution_client()
             self.data_processor = DataProcessor()
@@ -81,12 +83,11 @@ class NextNousReporter:
             Tupla com (period_a_start, period_a_end, period_b_start, period_b_end)
             Todas no formato YYYY-MM-DD (mesmo dia para start e end = dia completo)
         """
-        # Usa timezone de São Paulo para garantir data correta
-        tz_sp = pytz.timezone('America/Sao_Paulo')
+        # America/Sao_Paulo = UTC-3 (sem DST desde 2019); evita depender de pytz/tzdata
+        tz_sp = timezone(timedelta(hours=-3))
         now = datetime.now(tz_sp)
         
-        # Valida data e hora atual
-        logger.info(f"Data/hora atual (São Paulo): {now.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+        logger.info(f"Data/hora atual (Sao Paulo UTC-3): {now.strftime('%Y-%m-%d %H:%M:%S')}")
         
         # Período A: dia anterior completo
         period_a_date = (now - timedelta(days=1)).date()
@@ -185,6 +186,33 @@ class NextNousReporter:
             return d.strftime("%d/%m/%Y")
         except (ValueError, TypeError):
             return iso_date
+
+    @staticmethod
+    def _conversion_label_from_types(conversion_types: Optional[List[str]]) -> str:
+        """Rótulo da linha Conversão; sem tipo detectado usa 0 (pedido do cliente)."""
+        if not conversion_types:
+            return "0"
+        if len(conversion_types) == 2:
+            return "Lead + WhatsApp"
+        return conversion_types[0]
+
+    def _format_metric_lines(self, metrics: Dict[str, Any], conversion_label: str) -> str:
+        """Linhas comuns de métricas (valores ausentes tratados como zero)."""
+        spend = float(metrics.get("spend", 0) or 0)
+        impressions = int(metrics.get("impressions", 0) or 0)
+        clicks = int(metrics.get("clicks", 0) or 0)
+        cpc = float(metrics.get("cpc", 0) or 0)
+        conversions = int(metrics.get("conversions", 0) or 0)
+        cpa = float(metrics.get("cpa", 0) or 0)
+        return (
+            f"💰 *Investimento:* {format_currency(spend)}\n"
+            f"👁️ *Impressões:* {format_number(impressions)}\n"
+            f"🖱️ *Cliques:* {format_number(clicks)}\n"
+            f"💸 *CPC:* {format_currency(cpc)}\n"
+            f"📌 *Conversão:* {conversion_label}\n"
+            f"🎯 *Total conversões:* {format_number(conversions)}\n"
+            f"📉 *CPA:* {format_currency(cpa)}\n"
+        )
     
     def format_absolute_report(
         self,
@@ -194,97 +222,56 @@ class NextNousReporter:
         conversion_types: Optional[List[str]] = None,
     ) -> str:
         """
-        Relatório do dia (período A): título, data e linhas de métricas.
+        Relatório do dia (período A): título em negrito + linhas emoji *Rótulo:* valor (padrão WhatsApp).
         """
         if account_name:
-            report = f"*Relatório — {account_name}*\n"
+            report = f"*{account_name}*\n\n"
         else:
-            report = "*Relatório Meta Ads*\n"
-        report += f"📅 Data: {self._date_iso_to_br(reference_date)}\n\n"
-        
-        report += f"💰 Investimento: {format_currency(metrics['spend'])}\n"
-        report += f"👁️ Impressões: {format_number(metrics['impressions'])}\n"
-        report += f"🖱️ Cliques: {format_number(metrics['clicks'])}\n"
-        report += f"💸 CPC: {format_currency(metrics['cpc'])}\n"
-        
-        if conversion_types:
-            if len(conversion_types) == 2:
-                conversion_label = "Lead + WhatsApp"
-            elif len(conversion_types) == 1:
-                conversion_label = conversion_types[0]
-            else:
-                conversion_label = "Lead + WhatsApp"
-        else:
-            conversion_label = "Lead + WhatsApp"
-        
-        report += f"🎯 Conversões ({conversion_label}): {format_number(metrics['conversions'])}\n"
-        report += f"📉 CPA: {format_currency(metrics['cpa'])}\n"
-        
+            report = "*Relatório Meta Ads*\n\n"
+
+        report += f"📅 *Data:* {self._date_iso_to_br(reference_date)}\n"
+        conversion_label = self._conversion_label_from_types(conversion_types)
+        report += self._format_metric_lines(metrics, conversion_label)
+
         return report
     
     def format_comparative_report(
         self,
-        _metrics_a: Dict[str, float],
-        _metrics_b: Dict[str, float],
-        deltas: Dict[str, str],
-        champion: Dict[str, Any] | None,
-        date_a: str,
+        metrics_b: Dict[str, float],
         date_b: str,
         account_name: str = "",
+        conversion_types_b: Optional[List[str]] = None,
     ) -> str:
         """
-        Comparativo entre o dia de referência (date_a) e o dia anterior (date_b).
-        (_metrics_a/_metrics_b reservados para evoluções que precisem dos valores absolutos.)
+        Mesmo layout do bloco principal, com métricas absolutas do período B (dia comparativo).
         """
-        def get_delta_emoji(delta_str: str) -> str:
-            if delta_str == "Novo Volume" or delta_str.startswith("+"):
-                return "📈"
-            return "📉"
-        
         if account_name:
-            report = f"*Comparativo — {account_name}*\n"
+            report = f"*Comparativo — {account_name}*\n\n"
         else:
-            report = "*Comparativo*\n"
-        report += (
-            f"📅 {self._date_iso_to_br(date_a)} vs {self._date_iso_to_br(date_b)}\n\n"
-        )
-        
-        delta_spend = deltas["spend"]
-        report += f"📊 Investimento: {delta_spend} {get_delta_emoji(delta_spend)}\n"
-        
-        delta_clicks = deltas["clicks"]
-        report += f"🖱️ Cliques: {delta_clicks} {get_delta_emoji(delta_clicks)}\n"
-        
-        delta_conversions = deltas["conversions"]
-        report += f"🎯 Conversões: {delta_conversions} {get_delta_emoji(delta_conversions)}\n"
-        
-        delta_cpa = deltas["cpa"]
-        report += f"💸 CPA: {delta_cpa} {get_delta_emoji(delta_cpa)}\n"
-        
-        report += "\n"
-        if champion:
-            report += "🎯 Top criativo\n"
-            report += f"🏷️ Criativo: {champion['ad_name']}\n"
-            report += f"📁 Conjunto: {champion['adset_name']}\n"
-            report += f"📁 Campanha: {champion['campaign_name']}\n"
-        else:
-            report += "🎯 Top criativo: nenhum com conversão no período.\n"
-        
+            report = "*Comparativo*\n\n"
+
+        report += f"📅 {self._date_iso_to_br(date_b)}\n"
+        label_b = self._conversion_label_from_types(conversion_types_b)
+        report += self._format_metric_lines(metrics_b, label_b)
+
         return report
     
     def generate_and_send_report_for_client(
         self,
         client_name: str,
         ad_account_id: str,
-        group_id: str
+        group_id: str,
+        *,
+        send_if_zero_spend: bool = False,
     ) -> bool:
         """
-        Gera e envia o relatório completo para um cliente específico.
+        Gera e envia o relatório (métricas do dia + comparativo) em uma única mensagem WhatsApp.
         
         Args:
             client_name: Nome do cliente
             ad_account_id: ID da conta de anúncios (formato: act_XXXXXXXX)
             group_id: ID do grupo WhatsApp para envio
+            send_if_zero_spend: Se True, envia mesmo com spend ~0 (ex.: envio manual)
             
         Returns:
             True se o relatório foi gerado/enviado com sucesso, False caso contrário
@@ -314,13 +301,16 @@ class NextNousReporter:
                 period_a_ads
             )
             
-            # Verifica se há investimento (evita enviar mensagens vazias)
-            if results['period_a']['spend'] <= 0.01:  # Tolerância para arredondamento
-                logger.info(f"Cliente {client_name} sem investimento no período. Mensagem não será enviada.")
-                return True  # Não é erro, apenas não há dados para enviar
+            # Sem spend no período: no cron não envia; envio manual pode forçar
+            if results["period_a"]["spend"] <= 0.01 and not send_if_zero_spend:
+                logger.info(
+                    f"Cliente {client_name} sem investimento no período. Mensagem não será enviada."
+                )
+                return True
             
-            # Detecta tipos de conversão encontrados
+            # Detecta tipos de conversão (A: insights + ads; B: só insights de conta)
             conversion_types = self._detect_conversion_types(period_a_insights, period_a_ads)
+            conversion_types_b = self._detect_conversion_types(period_b_insights, [])
             
             # Formata mensagens
             message_1 = self.format_absolute_report(
@@ -330,14 +320,13 @@ class NextNousReporter:
                 conversion_types,
             )
             message_2 = self.format_comparative_report(
-                results["period_a"],
                 results["period_b"],
-                results["deltas"],
-                results["champion"],
-                period_a_start,
                 period_b_start,
                 client_name,
+                conversion_types_b,
             )
+
+            full_message = f"{message_1.rstrip()}\n\n{message_2.rstrip()}"
             
             # Modo DRY_RUN: salva em arquivo ao invés de enviar
             if self.dry_run:
@@ -347,32 +336,18 @@ class NextNousReporter:
                 
                 with open(report_file, 'w', encoding='utf-8') as f:
                     f.write(f"# Relatório {client_name}\n\n")
-                    f.write("## Mensagem 1\n\n")
-                    f.write(message_1)
-                    f.write("\n\n## Mensagem 2\n\n")
-                    f.write(message_2)
+                    f.write(full_message)
+                    f.write("\n")
                 
                 logger.info(f"DRY_RUN: Relatório salvo em {report_file}")
                 return True
             
-            # Envia mensagens via WhatsApp
-            logger.info(f"Enviando mensagens via WhatsApp para {client_name}...")
-            success_1 = self.evolution_client.send_text_message(group_id, message_1)
-            
-            if success_1:
-                # Aguarda um momento antes de enviar a segunda mensagem
-                time.sleep(2)
-                success_2 = self.evolution_client.send_text_message(group_id, message_2)
-                
-                if success_2:
-                    logger.info(f"Relatório enviado com sucesso para {client_name}")
-                    return True
-                else:
-                    logger.error(f"Falha ao enviar segunda mensagem do relatório para {client_name}")
-                    return False
-            else:
-                logger.error(f"Falha ao enviar primeira mensagem do relatório para {client_name}")
-                return False
+            logger.info(f"Enviando relatório (única mensagem) via WhatsApp para {client_name}...")
+            if self.evolution_client.send_text_message(group_id, full_message):
+                logger.info(f"Relatório enviado com sucesso para {client_name}")
+                return True
+            logger.error(f"Falha ao enviar relatório para {client_name}")
+            return False
                 
         except MetaAPIAuthError as e:
             logger.error(f"Erro de autenticação Meta para {client_name}: {str(e)}")
@@ -431,6 +406,14 @@ class NextNousReporter:
         """
         try:
             logger.info("Iniciando geração de relatórios Next Nous multi-client")
+            if not self.business_id:
+                logger.error("META_BUSINESS_ID é obrigatória para generate_and_send_report().")
+                notify_erro_automacao(
+                    "Fluxo multi-client abortado: META_BUSINESS_ID nao configurada no .env.",
+                    tipo_excecao="ConfigurationError",
+                    mensagem="Defina META_BUSINESS_ID para listar contas do Business.",
+                )
+                return False
             logger.info(f"Business ID: {self.business_id}")
             
             if self.dry_run:

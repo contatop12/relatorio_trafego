@@ -182,14 +182,14 @@ def get_evolution_client() -> EvolutionAPIClient:
     Raises:
         ValueError: Se variáveis de ambiente não estiverem configuradas
     """
-    base_url = os.getenv('EVOLUTION_URL')
+    base_url = os.getenv('EVOLUTION_URL') or os.getenv('EVOLUTION_SERVER_URL')
     api_key = os.getenv('EVOLUTION_API_KEY')
     instance = os.getenv('EVOLUTION_INSTANCE')
     max_retries = int(os.getenv('MAX_RETRIES', '3'))
     retry_delay = int(os.getenv('RETRY_DELAY_SECONDS', '300'))
     
     if not base_url:
-        raise ValueError("EVOLUTION_URL não configurada no .env")
+        raise ValueError("EVOLUTION_URL ou EVOLUTION_SERVER_URL não configurada no .env")
     if not api_key:
         raise ValueError("EVOLUTION_API_KEY não configurada no .env")
     if not instance:

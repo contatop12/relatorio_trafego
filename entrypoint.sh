@@ -9,7 +9,7 @@ if [ -f /app/.env ]; then
 else
     # 2. Cria .env a partir de variáveis de ambiente (se disponíveis)
     # Formato correto: KEY=value (sem prefixos ou exports)
-    printenv | grep -E '^(EVOLUTION_|META_|MAX_RETRIES|RETRY_DELAY_SECONDS)=' > /app/.env 2>/dev/null
+    printenv | grep -E '^(EVOLUTION_|META_|MAX_RETRIES|RETRY_DELAY_SECONDS|ERROR_WEBHOOK_|DRY_RUN|TZ)=' > /app/.env 2>/dev/null
     
     if [ -s /app/.env ]; then
         echo "Next Nous: .env criado a partir de variáveis de ambiente"
