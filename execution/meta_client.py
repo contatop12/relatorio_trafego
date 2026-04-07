@@ -217,6 +217,32 @@ class MetaAPIClient:
         
         logger.info(f"Buscando insights de conta: {start_date} até {end_date}")
         return self._paginate_request(endpoint, params)
+
+    def get_account_timezone_name(self) -> Optional[str]:
+        """
+        Busca o timezone configurado na conta de anúncios.
+
+        Returns:
+            Nome do timezone IANA (ex.: America/Sao_Paulo) se disponível.
+            Retorna None quando não for possível resolver.
+        """
+        endpoint = self.ad_account_id
+        params = {
+            'fields': 'timezone_name'
+        }
+
+        try:
+            data = self._make_request(endpoint, params)
+            timezone_name = (data.get('timezone_name') or '').strip()
+            if timezone_name:
+                logger.info(f"Timezone da conta {self.ad_account_id}: {timezone_name}")
+                return timezone_name
+        except Exception as e:
+            logger.warning(
+                f"Não foi possível buscar timezone da conta {self.ad_account_id}: {str(e)}"
+            )
+
+        return None
     
     def get_ads_with_insights(self, start_date: str, end_date: str) -> List[Dict[str, Any]]:
         """
@@ -234,7 +260,9 @@ class MetaAPIClient:
         # Primeiro busca campanhas com spend > 0
         campaigns_endpoint = f"{self.ad_account_id}/campaigns"
         campaigns_params = {
-            'fields': 'id,name,status,insights{spend}',
+            'fields': 'id,name,status,insights.time_range({"since":"%s","until":"%s"}){spend}' % (
+                start_date, end_date
+            ),
             'level': 'campaign',
             'limit': 1000
         }
@@ -256,7 +284,9 @@ class MetaAPIClient:
         for campaign_id in campaigns_with_spend:
             ads_endpoint = f"{campaign_id}/ads"
             ads_params = {
-                'fields': 'id,name,adset{id,name,campaign{id,name}},insights{spend,impressions,clicks,actions,cpc,cpm}',
+                'fields': 'id,name,adset{id,name,campaign{id,name}},insights.time_range({"since":"%s","until":"%s"}){spend,impressions,clicks,actions,cpc,cpm}' % (
+                    start_date, end_date
+                ),
                 'limit': 1000
             }
             

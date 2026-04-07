@@ -12,6 +12,7 @@ import logging
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List, Optional
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 # Adiciona o diretório raiz ao path para imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -72,7 +73,7 @@ class P12RelatoriosReporter:
             logger.error(f"Erro ao inicializar P12RelatoriosReporter: {str(e)}")
             raise
     
-    def get_period_dates(self) -> tuple[str, str, str, str]:
+    def get_period_dates(self, account_timezone_name: Optional[str] = None) -> tuple[str, str, str, str]:
         """
         Calcula as datas dos períodos A e B (dia anterior completo e dia antes disso).
         
@@ -83,11 +84,21 @@ class P12RelatoriosReporter:
             Tupla com (period_a_start, period_a_end, period_b_start, period_b_end)
             Todas no formato YYYY-MM-DD (mesmo dia para start e end = dia completo)
         """
-        # America/Sao_Paulo = UTC-3 (sem DST desde 2019); evita depender de pytz/tzdata
-        tz_sp = timezone(timedelta(hours=-3))
-        now = datetime.now(tz_sp)
-        
-        logger.info(f"Data/hora atual (Sao Paulo UTC-3): {now.strftime('%Y-%m-%d %H:%M:%S')}")
+        resolved_timezone = account_timezone_name or os.getenv("DEFAULT_REPORT_TIMEZONE", "America/Sao_Paulo")
+        try:
+            tz = ZoneInfo(resolved_timezone)
+            now = datetime.now(tz)
+            logger.info(
+                f"Data/hora atual ({resolved_timezone}): {now.strftime('%Y-%m-%d %H:%M:%S')}"
+            )
+        except ZoneInfoNotFoundError:
+            # Fallback seguro para manter execução mesmo sem base de timezones
+            tz_fallback = timezone(timedelta(hours=-3))
+            now = datetime.now(tz_fallback)
+            logger.warning(
+                f"Timezone '{resolved_timezone}' não encontrada. Usando fallback UTC-3."
+            )
+            logger.info(f"Data/hora atual (fallback UTC-3): {now.strftime('%Y-%m-%d %H:%M:%S')}")
         
         # Período A: dia anterior completo
         period_a_date = (now - timedelta(days=1)).date()
@@ -283,7 +294,10 @@ class P12RelatoriosReporter:
             meta_client = get_meta_client(ad_account_id)
             
             # Calcula períodos
-            period_a_start, period_a_end, period_b_start, period_b_end = self.get_period_dates()
+            account_timezone_name = meta_client.get_account_timezone_name()
+            period_a_start, period_a_end, period_b_start, period_b_end = self.get_period_dates(
+                account_timezone_name
+            )
             
             # Coleta dados da Meta API
             logger.info(f"Coletando dados do período atual para {client_name}...")

@@ -22,12 +22,12 @@ load_dotenv(env_path)
 
 
 def get_period_dates():
-    """Calcula as datas das últimas 24 horas fechadas."""
+    """Calcula o dia anterior completo."""
     now = datetime.now()
     
-    # Período: últimas 24 horas fechadas
-    period_end = (now - timedelta(days=1)).strftime('%Y-%m-%d')
-    period_start = (now - timedelta(days=2)).strftime('%Y-%m-%d')
+    # Período: dia anterior completo (YYYY-MM-DD até o mesmo dia)
+    period_start = (now - timedelta(days=1)).strftime('%Y-%m-%d')
+    period_end = period_start
     
     return period_start, period_end
 
