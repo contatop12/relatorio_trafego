@@ -5,6 +5,9 @@ WORKDIR /app
 # Instala timezone data
 RUN apk add --no-cache tzdata
 
+# Porta do webhook Make -> leads Lorena (mapear no Easypanel)
+EXPOSE 8080
+
 # Define timezone para São Paulo
 ENV TZ=America/Sao_Paulo
 RUN cp /usr/share/zoneinfo/$TZ /etc/localtime \

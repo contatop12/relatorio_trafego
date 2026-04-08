@@ -20,6 +20,14 @@ ERROR_WEBHOOK_URL=
 
 TZ=America/Sao_Paulo
 
+# Webhook leads Lorena (Make -> POST /lorena-new-lead -> WhatsApp grupo)
+# Porta HTTP interna do container (mapear no Easypanel para HTTPS).
+WEBHOOK_PORT=8080
+# ID do grupo WhatsApp (ex.: 120363...@g.us). Se vazio, usa group_id de "Lorena Carvalho" em clients.json
+LORENA_LEAD_GROUP_ID=
+# Se preenchido, o Make deve enviar o mesmo valor em X-Webhook-Secret ou Authorization: Bearer <valor>
+LORENA_LEAD_WEBHOOK_SECRET=
+
 # INSTRUÇÕES:
 # 1. Copie este arquivo para .env
 # 2. Preencha todas as variáveis obrigatórias com seus valores reais

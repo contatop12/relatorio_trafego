@@ -21,7 +21,8 @@ execution/                  # Scripts Python determinísticos
 │   ├── meta_client.py      # Conexão com Meta Marketing API
 │   ├── evolution_client.py # Conexão com Evolution API (WhatsApp)
 │   ├── data_processor.py   # Cálculos e comparações
-│   └── main_scheduler.py   # Orquestrador principal
+│   ├── main_scheduler.py   # Orquestrador principal
+│   └── lorena_lead_webhook.py  # HTTP POST leads Make -> WhatsApp (Lorena)
 directives/                 # SOPs em Markdown
 │   ├── meta_ads_fetch.md       # Como buscar dados na API
 │   ├── metrics_calculation.md  # Lógica de cálculo e comparação
@@ -113,6 +114,33 @@ No **Easypanel** (ou similar):
    - **`.tmp/cron.log`** — saída do `main_scheduler` e blocos `INICIO`/`FIM` com horário UTC e `exit_code` (gerado por `scripts/cron_daily_report.sh`).
    - **`.tmp/execution.log`** — logging do Python (handlers do app).
    - **`.tmp/crond.log`** — mensagens mínimas do daemon `crond` (BusyBox); o stdout do container fica limpo (sem `wakeup dt=60` a cada minuto).
+   - **`.tmp/webhook_lorena.log`** — cópia do stdout do webhook (o mesmo fluxo também vai para o **stdout do container** via `tee`, visível nos logs do Easypanel).
+   - **Filtro de eventos do webhook:** busque por **`P12_LORENA_WEBHOOK`** — cada hit do Make gera linhas como `RECEBIDO`, `PAYLOAD_OK`, `WHATSAPP_ENVIADO_OK` / `CONCLUIDO_OK`.
+
+### Webhook lead Lorena (Make)
+
+O container sobe um servidor HTTP em background (porta **`WEBHOOK_PORT`**, padrão **8080**) com:
+
+- **Rota:** `POST /lorena-new-lead`
+- **URL pública (após mapear a porta no Easypanel):** `https://<domínio-do-app>/lorena-new-lead`
+
+**Variáveis de ambiente:** ver `ENV_TEMPLATE.txt` (`LORENA_LEAD_GROUP_ID`, `LORENA_LEAD_WEBHOOK_SECRET`, `WEBHOOK_PORT`). Se `LORENA_LEAD_GROUP_ID` estiver vazio, usa o `group_id` do cliente **Lorena Carvalho** em `clients.json`.
+
+**Payload:** o Make pode enviar o JSON no formato envelope (array de objetos com `body`, contendo `data` e `mappable_field_data`, como no lead Meta). O servidor monta a mensagem WhatsApp (nome, link `wa.me` a partir de `telefone`, e-mail, bloco de respostas).
+
+**Segurança:** se `LORENA_LEAD_WEBHOOK_SECRET` estiver definido, cada requisição deve incluir o mesmo valor em `X-Webhook-Secret` ou `Authorization: Bearer <valor>`.
+
+**Easypanel:** publique a porta interna `WEBHOOK_PORT` no reverse proxy HTTPS do app (igual a qualquer serviço web). Sem mapeamento, o Make não alcança o webhook.
+
+**Teste local (exemplo mínimo):**
+
+```bash
+pip install -r requirements.txt
+# Em um terminal: WEBHOOK_PORT=8080 python execution/lorena_lead_webhook.py
+curl -sS -X POST "http://127.0.0.1:8080/lorena-new-lead" \
+  -H "Content-Type: application/json" \
+  -d "[{\"body\":{\"data\":{\"nome_completo\":\"Teste\",\"email\":\"a@b.com\",\"telefone\":\"5511999999999\"},\"mappable_field_data\":[{\"name\":\"pergunta_exemplo\",\"value\":\"resposta\"}]}}]"
+```
 
 ### 4. Modo DRY_RUN
 Para testar sem enviar WhatsApp, configure `DRY_RUN=true` no `.env`. Os relatórios serão salvos em `.tmp/report_<ad_account_id>.md`.
