@@ -14,16 +14,27 @@ RETRY_DELAY_SECONDS=300
 # Optional: DRY_RUN mode (quando true, não envia WhatsApp; apenas gera e salva em .tmp/)
 DRY_RUN=false
 
+# Espelhamento do Ads Manager (atribuição/resultados)
+# action_report_time: impression | conversion | mixed
+META_ACTION_REPORT_TIME=conversion
+# Janelas de atribuição (csv): ex. 7d_click,1d_view
+META_ATTRIBUTION_WINDOWS=7d_click,1d_view
+# action_type principal para "Resultados" (ex.: lead)
+REPORT_RESULT_ACTION_TYPE=lead
+
 # Webhook n8n para notificar erros (token Meta expirado vs outros erros da automação).
 # Se vazio, usa a URL padrão do projeto (Easypanel / erro-relatorio).
 ERROR_WEBHOOK_URL=
 
 TZ=America/Sao_Paulo
 
+# Relatorio semanal: cron na segunda 10:00 (Dockerfile). Forcar envio em qualquer dia (teste):
+# FORCE_WEEKLY_REPORT=1
+
 # Webhook leads Lorena (Make -> POST /lorena-new-lead -> WhatsApp grupo)
 # Porta HTTP interna do container (mapear no Easypanel para HTTPS).
 WEBHOOK_PORT=8080
-# ID do grupo WhatsApp (ex.: 120363...@g.us). Se vazio, usa group_id de "Lorena Carvalho" em clients.json
+# ID do grupo WhatsApp. Se vazio, usa group_id de "Lorena Carvalho" em clients.json (sincronize ao mudar o grupo).
 LORENA_LEAD_GROUP_ID=
 # Se preenchido, o Make deve enviar o mesmo valor em X-Webhook-Secret ou Authorization: Bearer <valor>
 LORENA_LEAD_WEBHOOK_SECRET=

@@ -7,6 +7,7 @@ percentuais entre períodos.
 """
 
 import logging
+import os
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime, timedelta
 
@@ -18,11 +19,18 @@ class DataProcessor:
     
     def __init__(self):
         """Inicializa o processador de dados."""
-        pass
+        self.primary_result_action = (
+            os.getenv("REPORT_RESULT_ACTION_TYPE", "lead").strip().lower()
+        )
     
     def extract_conversions(self, actions: List[Dict[str, Any]]) -> int:
         """
-        Extrai e soma conversões de Lead e WhatsApp.
+        Extrai e soma conversões principais de Lead e WhatsApp.
+
+        Importante:
+        - Conta apenas eventos principais para alinhar com "Resultados" do Gerenciador.
+        - Não soma eventos derivados/duplicados como:
+          `onsite_conversion.lead_grouped`, `offsite_*_add_meta_leads`, etc.
         
         Args:
             actions: Lista de ações do insight da Meta API
@@ -30,22 +38,69 @@ class DataProcessor:
         Returns:
             Total de conversões (Lead + WhatsApp)
         """
-        total_conversions = 0
+        primary_total = 0
+        lead_total = 0
+        messaging_total = 0
         
         if not actions:
-            return total_conversions
+            return 0
         
         for action in actions:
-            action_type = action.get('action_type', '').lower()
+            action_type = str(action.get('action_type', '')).lower()
             value = int(action.get('value', 0))
-            
-            # Soma eventos de Lead e WhatsApp
-            if 'lead' in action_type:
-                total_conversions += value
-            elif 'whatsapp' in action_type or 'whats_app' in action_type:
-                total_conversions += value
-        
-        return total_conversions
+
+            # Resultado principal configurável (espelhar "Resultados" do Gerenciador)
+            if self.primary_result_action and action_type == self.primary_result_action:
+                primary_total += value
+                continue
+
+            if action_type == 'lead':
+                lead_total += value
+                continue
+
+            # Eventos explícitos de conexão por mensagem/WhatsApp
+            if action_type in (
+                'onsite_conversion.total_messaging_connection',
+                'total_messaging_connection',
+            ):
+                messaging_total += value
+                continue
+            if 'whatsapp' in action_type or 'whats_app' in action_type:
+                messaging_total += value
+                continue
+
+        # Regra de priorização:
+        # 1) ação principal configurada (REPORT_RESULT_ACTION_TYPE)
+        # 2) lead
+        # 3) mensageria/WhatsApp
+        if primary_total > 0:
+            return primary_total
+        if lead_total > 0:
+            return lead_total
+        return messaging_total
+
+    def extract_link_clicks(self, actions: List[Dict[str, Any]]) -> int:
+        """
+        Extrai cliques de link a partir de actions (mais alinhado ao Gerenciador).
+
+        Prioriza action_type 'link_click'. Se ausente, usa 'outbound_click'.
+        """
+        if not actions:
+            return 0
+
+        link_clicks = 0
+        outbound_clicks = 0
+        for action in actions:
+            action_type = str(action.get('action_type', '')).lower()
+            value = int(action.get('value', 0))
+            if action_type == 'link_click':
+                link_clicks += value
+            elif action_type == 'outbound_click':
+                outbound_clicks += value
+
+        if link_clicks > 0:
+            return link_clicks
+        return outbound_clicks
     
     def aggregate_metrics(self, insights: List[Dict[str, Any]]) -> Dict[str, float]:
         """
@@ -68,10 +123,15 @@ class DataProcessor:
             # Métricas básicas
             aggregated['spend'] += float(insight.get('spend', 0))
             aggregated['impressions'] += int(insight.get('impressions', 0))
-            aggregated['clicks'] += int(insight.get('clicks', 0))
+            actions = insight.get('actions', [])
+            link_clicks = self.extract_link_clicks(actions)
+            if link_clicks > 0:
+                aggregated['clicks'] += link_clicks
+            else:
+                # Fallback para manter robustez caso actions não venha populado
+                aggregated['clicks'] += int(insight.get('clicks', 0))
             
             # Conversões (Lead + WhatsApp)
-            actions = insight.get('actions', [])
             aggregated['conversions'] += self.extract_conversions(actions)
         
         # Calcula métricas derivadas

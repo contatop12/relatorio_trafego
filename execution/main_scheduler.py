@@ -2,7 +2,7 @@
 Orquestrador principal do P12 Relatorios (Meta Ads via WhatsApp).
 
 Este script coordena a coleta de dados, processamento, formatação e envio
-do relatório diário de performance do Meta Ads.
+do relatório semanal de performance do Meta Ads (últimos 7 dias vs semana anterior).
 """
 
 import os
@@ -75,14 +75,13 @@ class P12RelatoriosReporter:
     
     def get_period_dates(self, account_timezone_name: Optional[str] = None) -> tuple[str, str, str, str]:
         """
-        Calcula as datas dos períodos A e B (dia anterior completo e dia antes disso).
-        
-        Busca por dia completo ao invés de 24h, validando timezone de São Paulo
-        para garantir que está buscando o dia correto.
-        
+        Período A: últimos 7 dias completos terminando em ontem (janela móvel, 7 dias).
+        Período B: os 7 dias imediatamente anteriores ao período A.
+
+        Usa o timezone da conta Meta quando informado; senão DEFAULT_REPORT_TIMEZONE ou America/Sao_Paulo.
+
         Returns:
-            Tupla com (period_a_start, period_a_end, period_b_start, period_b_end)
-            Todas no formato YYYY-MM-DD (mesmo dia para start e end = dia completo)
+            (period_a_start, period_a_end, period_b_start, period_b_end) em YYYY-MM-DD
         """
         resolved_timezone = account_timezone_name or os.getenv("DEFAULT_REPORT_TIMEZONE", "America/Sao_Paulo")
         try:
@@ -92,28 +91,43 @@ class P12RelatoriosReporter:
                 f"Data/hora atual ({resolved_timezone}): {now.strftime('%Y-%m-%d %H:%M:%S')}"
             )
         except ZoneInfoNotFoundError:
-            # Fallback seguro para manter execução mesmo sem base de timezones
             tz_fallback = timezone(timedelta(hours=-3))
             now = datetime.now(tz_fallback)
             logger.warning(
                 f"Timezone '{resolved_timezone}' não encontrada. Usando fallback UTC-3."
             )
             logger.info(f"Data/hora atual (fallback UTC-3): {now.strftime('%Y-%m-%d %H:%M:%S')}")
-        
-        # Período A: dia anterior completo
-        period_a_date = (now - timedelta(days=1)).date()
-        period_a_start = period_a_date.strftime('%Y-%m-%d')
-        period_a_end = period_a_date.strftime('%Y-%m-%d')  # Mesmo dia = dia completo
-        
-        # Período B: dia anterior ao Período A (dia antes do dia anterior)
-        period_b_date = (now - timedelta(days=2)).date()
-        period_b_start = period_b_date.strftime('%Y-%m-%d')
-        period_b_end = period_b_date.strftime('%Y-%m-%d')  # Mesmo dia = dia completo
-        
-        logger.info(f"Período A (dia anterior): {period_a_start}")
-        logger.info(f"Período B (comparativo): {period_b_start}")
-        
-        return period_a_start, period_a_end, period_b_start, period_b_end
+
+        yesterday = (now - timedelta(days=1)).date()
+        period_a_end = yesterday
+        period_a_start = yesterday - timedelta(days=6)
+
+        period_b_end = period_a_start - timedelta(days=1)
+        period_b_start = period_b_end - timedelta(days=6)
+
+        ps_a, pe_a = period_a_start.strftime("%Y-%m-%d"), period_a_end.strftime("%Y-%m-%d")
+        ps_b, pe_b = period_b_start.strftime("%Y-%m-%d"), period_b_end.strftime("%Y-%m-%d")
+
+        logger.info(f"Período A (7 dias até ontem): {ps_a} a {pe_a}")
+        logger.info(f"Período B (7 dias comparativo): {ps_b} a {pe_b}")
+
+        return ps_a, pe_a, ps_b, pe_b
+
+    @staticmethod
+    def is_scheduled_weekly_report_day() -> bool:
+        """
+        Relatório enviado só às segundas-feiras (timezone DEFAULT_REPORT_TIMEZONE).
+        Defina FORCE_WEEKLY_REPORT=1 para ignorar (testes manuais).
+        """
+        if os.getenv("FORCE_WEEKLY_REPORT", "").lower() in ("1", "true", "yes"):
+            return True
+        tz_name = os.getenv("DEFAULT_REPORT_TIMEZONE", "America/Sao_Paulo")
+        try:
+            tz = ZoneInfo(tz_name)
+        except ZoneInfoNotFoundError:
+            tz = timezone(timedelta(hours=-3))
+        now = datetime.now(tz)
+        return now.weekday() == 0
     
     def _notify_meta_auth_webhook(self, e: MetaAPIAuthError, cliente: Optional[str] = None) -> None:
         """Envia webhook de token expirado ou erro de auth Meta (no máximo um de cada tipo por execução)."""
@@ -221,47 +235,55 @@ class P12RelatoriosReporter:
             f"🖱️ *Cliques:* {format_number(clicks)}\n"
             f"💸 *CPC:* {format_currency(cpc)}\n"
             f"📌 *Conversão:* {conversion_label}\n"
-            f"🎯 *Total conversões:* {format_number(conversions)}\n"
+            f"🎯 *Resultados:* {format_number(conversions)}\n"
             f"📉 *CPA:* {format_currency(cpa)}\n"
         )
     
     def format_absolute_report(
         self,
         metrics: Dict[str, float],
-        reference_date: str,
+        period_start: str,
+        period_end: str,
         account_name: str = "",
         conversion_types: Optional[List[str]] = None,
     ) -> str:
         """
-        Relatório do dia (período A): título em negrito + linhas emoji *Rótulo:* valor (padrão WhatsApp).
+        Relatório semanal (período A): bloco principal com intervalo de 7 dias.
         """
         if account_name:
             report = f"*{account_name}*\n\n"
         else:
             report = "*Relatório Meta Ads*\n\n"
 
-        report += f"📅 *Data:* {self._date_iso_to_br(reference_date)}\n"
+        report += (
+            f"📊 *Relatório semanal*\n"
+            f"📅 *Período (7 dias):* {self._date_iso_to_br(period_start)} a {self._date_iso_to_br(period_end)}\n"
+        )
         conversion_label = self._conversion_label_from_types(conversion_types)
         report += self._format_metric_lines(metrics, conversion_label)
 
         return report
-    
+
     def format_comparative_report(
         self,
         metrics_b: Dict[str, float],
-        date_b: str,
+        period_b_start: str,
+        period_b_end: str,
         account_name: str = "",
         conversion_types_b: Optional[List[str]] = None,
     ) -> str:
         """
-        Mesmo layout do bloco principal, com métricas absolutas do período B (dia comparativo).
+        Métricas do período B (semana anterior, 7 dias).
         """
         if account_name:
             report = f"*Comparativo — {account_name}*\n\n"
         else:
             report = "*Comparativo*\n\n"
 
-        report += f"📅 {self._date_iso_to_br(date_b)}\n"
+        report += (
+            f"📅 *Semana anterior (7 dias):* "
+            f"{self._date_iso_to_br(period_b_start)} a {self._date_iso_to_br(period_b_end)}\n"
+        )
         label_b = self._conversion_label_from_types(conversion_types_b)
         report += self._format_metric_lines(metrics_b, label_b)
 
@@ -276,7 +298,7 @@ class P12RelatoriosReporter:
         send_if_zero_spend: bool = False,
     ) -> bool:
         """
-        Gera e envia o relatório (métricas do dia + comparativo) em uma única mensagem WhatsApp.
+        Gera e envia o relatório (7 dias + comparativo semana anterior) em uma única mensagem WhatsApp.
         
         Args:
             client_name: Nome do cliente
@@ -330,12 +352,14 @@ class P12RelatoriosReporter:
             message_1 = self.format_absolute_report(
                 results["period_a"],
                 period_a_start,
+                period_a_end,
                 client_name,
                 conversion_types,
             )
             message_2 = self.format_comparative_report(
                 results["period_b"],
                 period_b_start,
+                period_b_end,
                 client_name,
                 conversion_types_b,
             )
@@ -419,7 +443,13 @@ class P12RelatoriosReporter:
             True se pelo menos um relatório foi enviado com sucesso, False caso contrário
         """
         try:
-            logger.info("Iniciando geração de relatórios P12 Relatorios (multi-client)")
+            logger.info("Iniciando geração de relatórios P12 Relatorios (multi-client, modo semanal)")
+            if not self.is_scheduled_weekly_report_day():
+                logger.info(
+                    "Relatório semanal: hoje não é segunda-feira (DEFAULT_REPORT_TIMEZONE). "
+                    "Nenhum envio. Use FORCE_WEEKLY_REPORT=1 para forçar."
+                )
+                return True
             if not self.business_id:
                 logger.error("META_BUSINESS_ID é obrigatória para generate_and_send_report().")
                 notify_erro_automacao(

@@ -38,6 +38,7 @@ LOG_PREFIX = "[P12_LORENA_WEBHOOK]"
 
 _EXCLUDE_RESPOSTAS = frozenset({"nome_completo", "email", "telefone"})
 _WHATSAPP_MSG_MAX = 4000
+DEFAULT_LEAD_WHATSAPP = "+55 71 9106-5853"
 
 
 def _wh_log(message: str, level: int = logging.INFO) -> None:
@@ -76,6 +77,18 @@ def _digits_only(phone: Optional[str]) -> str:
     return re.sub(r"\D", "", str(phone))
 
 
+def _format_whatsapp_line(raw_phone: Optional[str]) -> str:
+    """
+    Monta linha de WhatsApp para mensagem.
+    - Se telefone do lead vier preenchido: usa link wa.me desse número.
+    - Se vier vazio: usa número padrão informado pelo time.
+    """
+    digits = _digits_only(raw_phone)
+    if digits:
+        return f"https://wa.me/{digits}"
+    return DEFAULT_LEAD_WHATSAPP
+
+
 def _mappable_lookup(mappable: List[Dict[str, Any]], name: str) -> str:
     for row in mappable:
         if not isinstance(row, dict):
@@ -96,7 +109,7 @@ def _format_field_value(v: Any) -> str:
 
 
 def _build_respostas_text(mappable: List[Dict[str, Any]]) -> str:
-    """Uma linha por campo: `nome_campo: valor` (sem negrito)."""
+    """Uma linha por campo: `*nome_campo:* valor` (pergunta em negrito)."""
     lines: List[str] = []
     for row in mappable:
         if not isinstance(row, dict):
@@ -105,7 +118,7 @@ def _build_respostas_text(mappable: List[Dict[str, Any]]) -> str:
         if not name or name in _EXCLUDE_RESPOSTAS:
             continue
         val = _format_field_value(row.get("value"))
-        lines.append(f"{name}: {val}")
+        lines.append(f"*{name}:* {val}")
     return "\n".join(lines)
 
 
@@ -321,8 +334,7 @@ def _format_lead_message(body: Dict[str, Any]) -> str:
     telefone_raw = data.get("telefone")
     if telefone_raw is None or telefone_raw == "":
         telefone_raw = _mappable_lookup(mappable, "telefone")
-    digits = _digits_only(telefone_raw)
-    wa_link = f"https://wa.me/{digits}" if digits else "(não informado)"
+    wa_link = _format_whatsapp_line(telefone_raw)
 
     respostas = _build_respostas_text(mappable)
     if not respostas:

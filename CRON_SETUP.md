@@ -1,7 +1,7 @@
-# Configuração do Cron para Execução Diária
+# Configuração do Cron para Execução Semanal
 
 ## Objetivo
-Configurar execução automática do P12 Relatorios diariamente às 10:00 AM.
+Configurar execução automática do P12 Relatorios **às segundas-feiras, 10:00** (relatório: últimos 7 dias vs semana anterior).
 
 ## Pré-requisitos
 - Python 3.8+ instalado
@@ -16,16 +16,16 @@ Configurar execução automática do P12 Relatorios diariamente às 10:00 AM.
 # Editar crontab
 crontab -e
 
-# Adicionar linha (executa diariamente às 10:00 AM)
-0 10 * * * cd /caminho/para/p12-relatorios && /usr/bin/python3 execution/main_scheduler.py >> .tmp/cron.log 2>&1
+# Adicionar linha (segundas às 10:00 — campo dia-da-semana = 1)
+0 10 * * 1 cd /caminho/para/p12-relatorios && /usr/bin/python3 execution/main_scheduler.py >> .tmp/cron.log 2>&1
 ```
 
 ### Windows (Task Scheduler)
 1. Abrir "Agendador de Tarefas" (Task Scheduler)
 2. Criar nova tarefa básica
 3. Configurar:
-   - **Nome**: P12 Relatorios Daily Report
-   - **Gatilho**: Diariamente às 10:00
+   - **Nome**: P12 Relatorios Weekly Report
+   - **Gatilho**: Semanalmente, **segunda-feira**, às 10:00
    - **Ação**: Iniciar um programa
    - **Programa/script**: `python.exe` (caminho completo)
    - **Adicionar argumentos**: `execution/main_scheduler.py`
@@ -35,9 +35,9 @@ crontab -e
 Criar arquivo `schedule_task.ps1`:
 ```powershell
 $action = New-ScheduledTaskAction -Execute "python.exe" -Argument "execution/main_scheduler.py" -WorkingDirectory "C:\caminho\para\p12-relatorios"
-$trigger = New-ScheduledTaskTrigger -Daily -At 10:00
+$trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday -At 10:00
 $principal = New-ScheduledTaskPrincipal -UserId "$env:USERNAME" -LogonType Interactive
-Register-ScheduledTask -TaskName "P12RelatoriosDailyReport" -Action $action -Trigger $trigger -Principal $principal
+Register-ScheduledTask -TaskName "P12RelatoriosWeeklyReport" -Action $action -Trigger $trigger -Principal $principal
 ```
 
 ## Verificação

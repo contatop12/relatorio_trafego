@@ -32,16 +32,20 @@ def _normalize_act_id(raw: str) -> str:
 
 
 def _period_dates_sp() -> tuple[str, str, str, str]:
-    # America/Sao_Paulo (UTC-3, sem DST) — evita depender de tzdata/pytz no Windows
+    # Alinhado ao main_scheduler: 7 dias ate ontem vs 7 dias anteriores (America/Sao_Paulo).
     sp = timezone(timedelta(hours=-3))
     now = datetime.now(sp)
-    period_a_date = (now - timedelta(days=1)).date()
-    period_a_start = period_a_date.strftime("%Y-%m-%d")
-    period_a_end = period_a_start
-    period_b_date = (now - timedelta(days=2)).date()
-    period_b_start = period_b_date.strftime("%Y-%m-%d")
-    period_b_end = period_b_start
-    return period_a_start, period_a_end, period_b_start, period_b_end
+    yesterday = (now - timedelta(days=1)).date()
+    pe_a = yesterday
+    ps_a = yesterday - timedelta(days=6)
+    pe_b = ps_a - timedelta(days=1)
+    ps_b = pe_b - timedelta(days=6)
+    return (
+        ps_a.strftime("%Y-%m-%d"),
+        pe_a.strftime("%Y-%m-%d"),
+        ps_b.strftime("%Y-%m-%d"),
+        pe_b.strftime("%Y-%m-%d"),
+    )
 
 
 def _champion_webhook(ch: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
@@ -78,7 +82,8 @@ def main() -> None:
 
     period_a_start, period_a_end, period_b_start, period_b_end = _period_dates_sp()
     print(
-        f"Periodo A: {period_a_start} | Periodo B (comparativo): {period_b_start}"
+        f"Periodo A (7d): {period_a_start}..{period_a_end} | "
+        f"Periodo B (7d): {period_b_start}..{period_b_end}"
     )
 
     meta_client = get_meta_client(ad_account_id)

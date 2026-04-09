@@ -1,5 +1,5 @@
 #!/bin/sh
-# Executado pelo crontab no container: registra inicio/fim e delega ao orquestrador.
+# Executado pelo crontab no container (segunda 10:00): relatorio semanal + registra inicio/fim.
 set -eu
 
 cd /app

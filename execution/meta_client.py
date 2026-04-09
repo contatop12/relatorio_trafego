@@ -6,6 +6,7 @@ anúncios e métricas da Meta Ads, com tratamento de erros e retries.
 """
 
 import os
+import json
 import requests
 import time
 import logging
@@ -97,6 +98,29 @@ class MetaAPIClient:
         self.access_token = access_token
         self.ad_account_id = ad_account_id
         self.max_retries = max_retries
+
+    def _insights_attribution_params(self) -> Dict[str, Any]:
+        """
+        Parâmetros de atribuição para aproximar números do Ads Manager.
+
+        Variáveis de ambiente:
+        - META_ACTION_REPORT_TIME: impression | conversion | mixed (default: conversion)
+        - META_ATTRIBUTION_WINDOWS: csv (default: 7d_click,1d_view)
+        """
+        params: Dict[str, Any] = {}
+
+        action_report_time = os.getenv("META_ACTION_REPORT_TIME", "conversion").strip()
+        if action_report_time:
+            params["action_report_time"] = action_report_time
+
+        windows_raw = os.getenv("META_ATTRIBUTION_WINDOWS", "7d_click,1d_view").strip()
+        if windows_raw:
+            windows = [w.strip() for w in windows_raw.split(",") if w.strip()]
+            if windows:
+                # Graph API espera array serializado
+                params["action_attribution_windows"] = json.dumps(windows)
+
+        return params
         
     def _make_request(self, endpoint: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -214,6 +238,7 @@ class MetaAPIClient:
             'time_range': f"{{\"since\":\"{start_date}\",\"until\":\"{end_date}\"}}",
             'time_increment': 1
         }
+        params.update(self._insights_attribution_params())
         
         logger.info(f"Buscando insights de conta: {start_date} até {end_date}")
         return self._paginate_request(endpoint, params)
@@ -259,6 +284,7 @@ class MetaAPIClient:
         """
         # Primeiro busca campanhas com spend > 0
         campaigns_endpoint = f"{self.ad_account_id}/campaigns"
+        attribution_params = self._insights_attribution_params()
         campaigns_params = {
             'fields': 'id,name,status,insights.time_range({"since":"%s","until":"%s"}){spend}' % (
                 start_date, end_date
@@ -266,6 +292,7 @@ class MetaAPIClient:
             'level': 'campaign',
             'limit': 1000
         }
+        campaigns_params.update(attribution_params)
         
         logger.info(f"Buscando campanhas com spend no período: {start_date} até {end_date}")
         campaigns = self._paginate_request(campaigns_endpoint, campaigns_params)
@@ -289,6 +316,7 @@ class MetaAPIClient:
                 ),
                 'limit': 1000
             }
+            ads_params.update(attribution_params)
             
             ads = self._paginate_request(ads_endpoint, ads_params)
             

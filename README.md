@@ -103,7 +103,7 @@ Cada entrada em `clients.json` é independente: uma linha de negócio = uma cont
 O repositório inclui um [`Dockerfile`](Dockerfile) que:
 
 - Instala dependências, copia o projeto (incluindo **`clients.json`** versionado no git).
-- Agenda **`execution/main_scheduler.py` diariamente às 10:00** (horário do container; `TZ` padrão São Paulo no Dockerfile).
+- Agenda **`execution/main_scheduler.py` às segundas-feiras, 10:00** (relatório: últimos 7 dias vs semana anterior; `TZ` padrão São Paulo no Dockerfile).
 
 No **Easypanel** (ou similar):
 
@@ -147,7 +147,10 @@ Para testar sem enviar WhatsApp, configure `DRY_RUN=true` no `.env`. Os relatór
 
 ### 5. Execução Manual
 ```bash
-# Execução normal (envia WhatsApp)
+# Execução pelo cron (só envia às segundas, timezone DEFAULT_REPORT_TIMEZONE)
+# Para forçar em qualquer dia: FORCE_WEEKLY_REPORT=1 python execution/main_scheduler.py
+
+# Execução normal (envia WhatsApp nas segundas ou com FORCE_WEEKLY_REPORT=1)
 python execution/main_scheduler.py
 
 # Listar contas do Business (validação)

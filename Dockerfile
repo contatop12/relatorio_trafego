@@ -25,11 +25,11 @@ RUN mkdir -p .tmp && chmod 755 .tmp
 
 RUN chmod +x scripts/cron_daily_report.sh
 
-# Cron diario 10:00 (fuso do container; TZ=America/Sao_Paulo no Dockerfile).
-# Job chama script que escreve blocos legiveis em .tmp/cron.log.
+# Cron semanal: segunda-feira 10:00 (fuso do container; TZ=America/Sao_Paulo).
+# Relatorio: ultimos 7 dias vs semana anterior (ver main_scheduler.get_period_dates).
 RUN echo 'SHELL=/bin/sh' > /etc/crontabs/root \
     && echo 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin' >> /etc/crontabs/root \
-    && echo '0 10 * * * /app/scripts/cron_daily_report.sh' >> /etc/crontabs/root
+    && echo '0 10 * * 1 /app/scripts/cron_daily_report.sh' >> /etc/crontabs/root
 
 # Torna o entrypoint executável
 # entrypoint.sh: sincroniza variáveis do Easypanel para .env (P12 Relatorios)
