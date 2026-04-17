@@ -338,6 +338,7 @@ def _resolve_lead_route(page_id: str) -> Optional[Dict[str, str]]:
         return {
             "client_name": str(c.get("client_name", "")).strip() or "Cliente",
             "group_id": group_id,
+            "phone_number": str(c.get("lead_phone_number", "")).strip(),
             "template": str(c.get("lead_template", "")).strip() or "default",
         }
     return None
@@ -358,6 +359,7 @@ def _resolve_legacy_lorena_route() -> Optional[Dict[str, str]]:
         return {
             "client_name": client_name or "Lorena Carvalho",
             "group_id": group_id,
+            "phone_number": "",
             "template": template or "lorena",
         }
     return None
@@ -396,8 +398,31 @@ def _base_message_fields(body: Dict[str, Any]) -> Dict[str, str]:
         "nome": nome or "(nao informado)",
         "email": email or "(nao informado)",
         "whatsapp": wa_link,
+        "form_name": _extract_form_name(body),
         "respostas": respostas,
     }
+
+
+def _extract_form_name(body: Dict[str, Any]) -> str:
+    data = body.get("data") if isinstance(body.get("data"), dict) else {}
+    mappable = _ensure_mappable(body, data)
+    return (
+        _first_non_empty(
+            data.get("form_name"),
+            data.get("formName"),
+            data.get("formulario"),
+            data.get("formulário"),
+            data.get("nome_formulario"),
+            data.get("nome_form"),
+            _mappable_lookup(mappable, "form_name"),
+            _mappable_lookup(mappable, "formName"),
+            _mappable_lookup(mappable, "formulario"),
+            _mappable_lookup(mappable, "formulário"),
+            _mappable_lookup(mappable, "nome_formulario"),
+            _mappable_lookup(mappable, "nome_form"),
+        )
+        or "(nao informado)"
+    )
 
 
 def _truncate_message(msg: str) -> str:
@@ -432,6 +457,7 @@ def _format_pratical_life_lead_message(body: Dict[str, Any], client_name: str) -
         f"- Nome: {base['nome']}\n"
         f"- WhatsApp: {base['whatsapp']}\n"
         f"- E-mail: {base['email']}\n"
+        f"- Nome do formulario: {base['form_name']}\n"
         f"\n"
         f"Formulario:\n"
         f"{base['respostas']}"
@@ -549,6 +575,20 @@ def _handle_meta_new_lead(endpoint_label: str, allow_legacy_lorena_fallback: boo
                     f"LEAD_{idx} | WHATSAPP_FALHA | cliente={route['client_name']}",
                     level=logging.ERROR,
                 )
+                continue
+
+            extra_phone = _digits_only(route.get("phone_number"))
+            if route.get("template") == "pratical_life" and extra_phone:
+                if client.send_text_message(extra_phone, message):
+                    _wh_log(
+                        f"LEAD_{idx} | WHATSAPP_TELEFONE_ENVIADO_OK | cliente={route['client_name']} | numero={extra_phone}"
+                    )
+                else:
+                    errors.append(f"lead_index_{idx}: phone send returned false")
+                    _wh_log(
+                        f"LEAD_{idx} | WHATSAPP_TELEFONE_FALHA | cliente={route['client_name']} | numero={extra_phone}",
+                        level=logging.ERROR,
+                    )
         except Exception as e:
             errors.append(f"lead_index_{idx}: {e!s}")
             _wh_log(f"LEAD_{idx} | WHATSAPP_EXCECAO | {e!s}", level=logging.ERROR)

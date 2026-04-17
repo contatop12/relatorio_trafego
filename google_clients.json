@@ -20,5 +20,113 @@
     "enabled": false,
     "primary_conversions": [],
     "notes": "Passo 1: duplicar este bloco. Passo 2: preencher client_name/google_customer_id/group_id. Passo 3: enabled=true."
+  },
+  {
+    "id": "vita_audio",
+    "client_name": "Vita Audio",
+    "google_customer_id": "697-382-1129",
+    "group_id": "000000000000000000@g.us",
+    "enabled": false,
+    "primary_conversions": [],
+    "notes": "Aguardando preenchimento do group_id."
+  },
+  {
+    "id": "ventura_vet_p12",
+    "client_name": "Ventura Vet [P12]",
+    "google_customer_id": "135-157-8433",
+    "group_id": "000000000000000000@g.us",
+    "enabled": false,
+    "primary_conversions": [],
+    "notes": "Aguardando preenchimento do group_id."
+  },
+  {
+    "id": "rx_digital",
+    "client_name": "RX DIGITAL",
+    "google_customer_id": "614-897-2627",
+    "group_id": "000000000000000000@g.us",
+    "enabled": false,
+    "primary_conversions": [],
+    "notes": "Aguardando preenchimento do group_id."
+  },
+  {
+    "id": "thr_maquinas",
+    "client_name": "THR Máquinas",
+    "google_customer_id": "646-484-7505",
+    "group_id": "000000000000000000@g.us",
+    "enabled": false,
+    "primary_conversions": [],
+    "notes": "Aguardando preenchimento do group_id."
+  },
+  {
+    "id": "sabah",
+    "client_name": "Sabah",
+    "google_customer_id": "806-492-3101",
+    "group_id": "000000000000000000@g.us",
+    "enabled": false,
+    "primary_conversions": [],
+    "notes": "Aguardando preenchimento do group_id."
+  },
+  {
+    "id": "taina_aci",
+    "client_name": "Tainã aci",
+    "google_customer_id": "466-662-5860",
+    "group_id": "000000000000000000@g.us",
+    "enabled": false,
+    "primary_conversions": [],
+    "notes": "Aguardando preenchimento do group_id."
+  },
+  {
+    "id": "persianas_paulista",
+    "client_name": "Persianas Paulista",
+    "google_customer_id": "999-432-4142",
+    "group_id": "000000000000000000@g.us",
+    "enabled": false,
+    "primary_conversions": [],
+    "notes": "Aguardando preenchimento do group_id."
+  },
+  {
+    "id": "practical_life_campo_belo_2",
+    "client_name": "Practical Life Campo Belo 2",
+    "google_customer_id": "248-795-4092",
+    "group_id": "000000000000000000@g.us",
+    "enabled": false,
+    "primary_conversions": [],
+    "notes": "Aguardando preenchimento do group_id."
+  },
+  {
+    "id": "cemo_oftalmologia_taboao_da_serra",
+    "client_name": "CEMO Oftalmologia - Taboão da Serra",
+    "google_customer_id": "444-974-8870",
+    "group_id": "000000000000000000@g.us",
+    "enabled": false,
+    "primary_conversions": [],
+    "notes": "Aguardando preenchimento do group_id."
+  },
+  {
+    "id": "locadora_exatidao_p12",
+    "client_name": "Locadora Exatidão - P12",
+    "google_customer_id": "832-018-5148",
+    "group_id": "000000000000000000@g.us",
+    "enabled": false,
+    "primary_conversions": [],
+    "notes": "Aguardando preenchimento do group_id."
+  },
+  {
+    "id": "the_mundo_many_llc",
+    "client_name": "The Mundo Many LLC",
+    "google_customer_id": "353-945-5968",
+    "group_id": "000000000000000000@g.us",
+    "enabled": false,
+    "primary_conversions": [],
+    "notes": "Aguardando preenchimento do group_id."
+  },
+  {
+    "id": "chaveiro_catarina",
+    "client_name": "Chaveiro Catarina",
+    "google_customer_id": "198-643-2646",
+    "group_id": "000000000000000000@g.us",
+    "enabled": false,
+    "primary_conversions": [],
+    "notes": "Aguardando preenchimento do group_id."
   }
 ]
