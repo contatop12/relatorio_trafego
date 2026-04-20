@@ -36,6 +36,11 @@ DEFAULT_REPORT_TIMEZONE=America/Sao_Paulo
 # Webhook leads Meta multi-cliente (Make -> POST /meta-new-lead -> WhatsApp grupo)
 # Porta HTTP interna do container (mapear no Easypanel para HTTPS).
 WEBHOOK_PORT=8080
+
+# Dashboard viva de clientes (Flask)
+# Dica: use domínio/subdomínio separado no Easypanel apontando para DASHBOARD_PORT.
+ENABLE_DASHBOARD=true
+DASHBOARD_PORT=8091
 # Segredo do webhook. Se preenchido, o Make deve enviar o mesmo valor em:
 # X-Webhook-Secret ou Authorization: Bearer <valor>.
 META_LEAD_WEBHOOK_SECRET=

@@ -7,6 +7,8 @@ RUN apk add --no-cache tzdata
 
 # Porta do webhook Make -> leads Meta (mapear no Easypanel)
 EXPOSE 8080
+# Porta da dashboard viva (mapear em domínio separado no Easypanel)
+EXPOSE 8091
 
 # Define timezone para São Paulo
 ENV TZ=America/Sao_Paulo

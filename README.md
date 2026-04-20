@@ -139,6 +139,7 @@ No **Easypanel** (ou similar):
 2. Garanta **`META_BUSINESS_ID`** e **`META_ACCESS_TOKEN`** — sem Business ID o fluxo multi-client do cron aborta.
 3. Para números alinhados ao Ads Manager, defina em produção: **`META_ACTION_REPORT_TIME`**, **`META_ATTRIBUTION_WINDOWS`**, **`REPORT_RESULT_ACTION_TYPE`** (ver `ENV_TEMPLATE.txt`).
 4. Webhook de leads: mapear **`WEBHOOK_PORT`** (ex. 8080) no HTTPS; opcional **`META_LEAD_WEBHOOK_SECRET`**; **`META_LEAD_FALLBACK_WHATSAPP`** só se quiser um texto fixo quando o lead não tiver telefone com dígitos.
+5. Dashboard viva: manter **`ENABLE_DASHBOARD=true`** e mapear um domínio/subdomínio separado para **`DASHBOARD_PORT`** (padrão `8091`), sem alterar o domínio do webhook em `8080`.
 5. Para **incluir cliente novo**: edite `clients.json`, faça commit/deploy de nova imagem **ou** monte um volume só em `/app/clients.json` para mudar sem rebuild.
 6. Logs no container:
    - **`.tmp/cron.log`** — saída do `main_scheduler` e blocos `INICIO`/`FIM` com horário UTC e `exit_code` (gerado por `scripts/cron_daily_report.sh`).
@@ -193,6 +194,10 @@ python execution/dashboard_app.py
 Depois abra no navegador:
 
 - `http://127.0.0.1:8091/` (ou `DASHBOARD_PORT` configurada)
+
+No Easypanel, recomenda-se:
+- Domínio A (webhook Make): porta `8080`
+- Domínio B (dashboard): porta `8091`
 
 **O que a dashboard entrega:**
 - Lista de clientes e status (`Ativo completo`, `Ativo parcial`, `Pausado`, `Inconsistente`)
