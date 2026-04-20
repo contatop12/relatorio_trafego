@@ -63,6 +63,15 @@ def _period_dates_last_7_days() -> Tuple[str, str]:
 
 
 def _load_google_clients() -> List[Dict[str, Any]]:
+    try:
+        from execution.persistence import db_enabled, ensure_db_ready, list_google_clients
+
+        if db_enabled():
+            ensure_db_ready()
+            rows = list_google_clients()
+            return [{k: v for k, v in r.items() if k != "id"} for r in rows]
+    except Exception:
+        pass
     clients_path = os.path.join(os.path.dirname(__file__), "..", "google_clients.json")
     with open(clients_path, "r", encoding="utf-8") as f:
         data = json.load(f)

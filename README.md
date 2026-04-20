@@ -135,13 +135,14 @@ O repositório inclui um [`Dockerfile`](Dockerfile) que:
 
 No **Easypanel** (ou similar):
 
-1. Defina variáveis de ambiente equivalentes ao `.env` (o [`entrypoint.sh`](entrypoint.sh) gera `/app/.env` a partir delas se não houver arquivo montado). O entrypoint copia também `REPORT_*`, `DEFAULT_REPORT_TIMEZONE`, `FORCE_WEEKLY_REPORT` e todo `META_*` (inclui atribuição).
+1. Modelo completo de variáveis: **[`ENV_TEMPLATE.txt`](ENV_TEMPLATE.txt)** (organizado por blocos para o Easypanel). O [`entrypoint.sh`](entrypoint.sh) gera `/app/.env` a partir do `printenv` se não existir ficheiro montado — inclui `META_*`, `EVOLUTION_*`, `DASHBOARD_*`, `GOOGLE_*`, **`DATABASE_URL`** / `SUPABASE_DATABASE_URL`, `FLASK_SECRET_KEY`, `SUPABASE_*`.
 2. Garanta **`META_BUSINESS_ID`** e **`META_ACCESS_TOKEN`** — sem Business ID o fluxo multi-client do cron aborta.
 3. Para números alinhados ao Ads Manager, defina em produção: **`META_ACTION_REPORT_TIME`**, **`META_ATTRIBUTION_WINDOWS`**, **`REPORT_RESULT_ACTION_TYPE`** (ver `ENV_TEMPLATE.txt`).
 4. Webhook de leads: mapear **`WEBHOOK_PORT`** (ex. 8080) no HTTPS; opcional **`META_LEAD_WEBHOOK_SECRET`**; **`META_LEAD_FALLBACK_WHATSAPP`** só se quiser um texto fixo quando o lead não tiver telefone com dígitos.
-5. Dashboard viva: manter **`ENABLE_DASHBOARD=true`** e mapear um domínio/subdomínio separado para **`DASHBOARD_PORT`** (padrão `8091`), sem alterar o domínio do webhook em `8080`.
-5. Para **incluir cliente novo**: edite `clients.json`, faça commit/deploy de nova imagem **ou** monte um volume só em `/app/clients.json` para mudar sem rebuild.
-6. Logs no container:
+5. Dashboard viva: manter **`ENABLE_DASHBOARD=true`** e mapear um domínio/subdomínio separado para **`DASHBOARD_PORT`** (padrão `8091`), sem alterar o domínio do webhook em `8080`. Opcional: **`DASHBOARD_AUTH_PASSWORD`** + **`DASHBOARD_SESSION_SECRET`** (login na Pulseboard; ver `ENV_TEMPLATE.txt`).
+6. **Postgres (Supabase):** executar o SQL em **`supabase/migrations/001_initial_pulseboard.sql`** no painel; depois definir **`DATABASE_URL`** (pooler Transaction). Com BD ativa, clientes/templates deixam de depender só dos JSON no deploy (ver [`supabase/README.md`](supabase/README.md)).
+7. Para **incluir cliente novo** sem BD: edite `clients.json`, faça commit/deploy **ou** monte volume em `/app/clients.json`. Com **`DATABASE_URL`**, use a dashboard (dados na tabela).
+8. Logs no container:
    - **`.tmp/cron.log`** — saída do `main_scheduler` e blocos `INICIO`/`FIM` com horário UTC e `exit_code` (gerado por `scripts/cron_daily_report.sh`).
    - **`.tmp/execution.log`** — logging do Python (handlers do app).
    - **`.tmp/crond.log`** — mensagens mínimas do daemon `crond` (BusyBox); o stdout do container fica limpo (sem `wakeup dt=60` a cada minuto).

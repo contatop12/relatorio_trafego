@@ -12,13 +12,14 @@ import json
 import logging
 import os
 import re
+import secrets
 import sys
 import requests
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from dotenv import load_dotenv
-from flask import Flask, Response, jsonify, render_template, request
+from flask import Flask, Response, jsonify, redirect, render_template, request, session
 
 # Raiz do projeto no path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -42,6 +43,11 @@ app = Flask(
     __name__,
     template_folder=os.path.join(os.path.dirname(__file__), "..", "templates"),
     static_folder=os.path.join(os.path.dirname(__file__), "..", "static"),
+)
+app.secret_key = (
+    os.environ.get("DASHBOARD_SESSION_SECRET")
+    or os.environ.get("FLASK_SECRET_KEY")
+    or secrets.token_hex(32)
 )
 
 LOG_PREFIX = "[P12_META_LEAD_WEBHOOK]"
@@ -450,6 +456,15 @@ def _ensure_mappable(body: Dict[str, Any], data: Dict[str, Any]) -> List[Dict[st
 
 
 def _load_clients() -> List[Dict[str, Any]]:
+    try:
+        from execution.persistence import db_enabled, ensure_db_ready, list_meta_clients
+
+        if db_enabled():
+            ensure_db_ready()
+            rows = list_meta_clients()
+            return [{k: v for k, v in r.items() if k != "id"} for r in rows]
+    except Exception as e:
+        logger.warning("Falha ao carregar clientes Meta do Postgres: %s", e)
     clients_path = os.path.join(os.path.dirname(__file__), "..", "clients.json")
     try:
         with open(clients_path, "r", encoding="utf-8") as f:
@@ -1024,6 +1039,50 @@ def lorena_new_lead_legacy():
         allow_legacy_lorena_fallback=True,
     )
     return response, status
+
+
+@app.before_request
+def _dash_proxy_auth() -> Optional[Any]:
+    path = request.path or ""
+    if not path.startswith("/dash"):
+        return None
+    return dashboard_module.dashboard_auth_gate_response()
+
+
+@app.get("/dash/login")
+def dash_login_page() -> str:
+    next_url = request.args.get("next") or "/dash/"
+    return render_template(
+        "login.html",
+        next_url=next_url,
+        error=None,
+        form_action="/dash/login",
+    )
+
+
+@app.post("/dash/login")
+def dash_login_post() -> Any:
+    next_url = (request.form.get("next") or "/dash/").strip() or "/dash/"
+    if not dashboard_module.verify_dashboard_password(request.form.get("password") or ""):
+        return render_template(
+            "login.html",
+            next_url=next_url,
+            error="Senha incorreta.",
+            form_action="/dash/login",
+        )
+    session["dashboard_ok"] = True
+    return redirect(next_url)
+
+
+@app.get("/dash/logout")
+def dash_logout() -> Any:
+    session.clear()
+    return redirect("/dash/login")
+
+
+@app.get("/dash/api/health")
+def dash_api_health() -> Any:
+    return dashboard_module.api_health()
 
 
 @app.get("/dash")

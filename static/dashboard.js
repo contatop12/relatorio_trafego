@@ -9,6 +9,18 @@ const state = {
 const DASHBOARD_BASE =
   (document.querySelector('meta[name="dashboard-base"]')?.getAttribute("content") || "").replace(/\/+$/, "");
 const apiUrl = (path) => `${DASHBOARD_BASE}${path}`;
+
+function dashFetch(input, init) {
+  const next = { credentials: "same-origin", ...(init || {}) };
+  return fetch(input, next).then((r) => {
+    if (r.status === 401) {
+      const base = DASHBOARD_BASE || "";
+      window.location.href = base ? `${base.replace(/\/+$/, "")}/login` : "/login";
+    }
+    return r;
+  });
+}
+
 const flowSteps = ["RECEBIDO", "PAYLOAD_OK", "ROTA_RESOLVIDA", "MENSAGEM_FORMATADA", "WHATSAPP_ENVIADO_OK", "CONCLUIDO_OK"];
 
 function parseCsvValue(value) {
@@ -313,7 +325,7 @@ function renderMetaClients() {
       const fd = new FormData(editForm);
       const payload = Object.fromEntries(fd.entries());
       payload.enabled = !!fd.get("enabled");
-      const resp = await fetch(apiUrl(`/api/clients/${client.id}`), {
+      const resp = await dashFetch(apiUrl(`/api/clients/${client.id}`), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -382,7 +394,7 @@ function renderGoogleClients() {
       const fd = new FormData(editForm);
       const payload = Object.fromEntries(fd.entries());
       payload.enabled = !!fd.get("enabled");
-      const resp = await fetch(apiUrl(`/api/google-clients/${client.id}`), {
+      const resp = await dashFetch(apiUrl(`/api/google-clients/${client.id}`), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -465,7 +477,7 @@ function renderFiltersForm() {
 }
 
 async function fetchMetaClients() {
-  const r = await fetch(apiUrl("/api/clients"));
+  const r = await dashFetch(apiUrl("/api/clients"));
   if (!r.ok) throw new Error("Falha ao carregar clientes Meta");
   const data = await r.json();
   state.metaClients = data.clients || [];
@@ -476,7 +488,7 @@ async function fetchMetaClients() {
 }
 
 async function fetchGoogleClients() {
-  const r = await fetch(apiUrl("/api/google-clients"));
+  const r = await dashFetch(apiUrl("/api/google-clients"));
   if (!r.ok) throw new Error("Falha ao carregar clientes Google");
   const data = await r.json();
   state.googleClients = data.clients || [];
@@ -485,7 +497,7 @@ async function fetchGoogleClients() {
 }
 
 async function fetchTemplates() {
-  const r = await fetch(apiUrl("/api/message-templates"));
+  const r = await dashFetch(apiUrl("/api/message-templates"));
   if (!r.ok) throw new Error("Falha ao carregar templates");
   const data = await r.json();
   state.templates = data;
@@ -503,7 +515,7 @@ async function submitNewMetaClient(ev) {
   const fd = new FormData(form);
   const payload = Object.fromEntries(fd.entries());
   payload.enabled = !!fd.get("enabled");
-  const r = await fetch(apiUrl("/api/clients"), {
+  const r = await dashFetch(apiUrl("/api/clients"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -529,7 +541,7 @@ async function submitNewGoogleClient(ev) {
   const fd = new FormData(form);
   const payload = Object.fromEntries(fd.entries());
   payload.enabled = !!fd.get("enabled");
-  const r = await fetch(apiUrl("/api/google-clients"), {
+  const r = await dashFetch(apiUrl("/api/google-clients"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -554,7 +566,7 @@ async function saveTemplate(ev) {
   const payload = Object.fromEntries(fd.entries());
   const channel = payload.channel;
   const templateId = payload.template_id;
-  const r = await fetch(apiUrl(`/api/message-templates/${encodeURIComponent(channel)}/${encodeURIComponent(templateId)}`), {
+  const r = await dashFetch(apiUrl(`/api/message-templates/${encodeURIComponent(channel)}/${encodeURIComponent(templateId)}`), {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -574,7 +586,7 @@ async function saveFilters(ev) {
   const feedback = document.getElementById("filtersFeedback");
   feedback.textContent = "Salvando filtros...";
   const payload = Object.fromEntries(new FormData(form).entries());
-  const r = await fetch(apiUrl("/api/message-filters/meta_lead"), {
+  const r = await dashFetch(apiUrl("/api/message-filters/meta_lead"), {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -614,7 +626,7 @@ async function generateTemplatePreview() {
     conversions_block: "- Formulário: 12\n- WhatsApp: 8",
     campaigns_block: "1) *Campanha Busca*\n👁️ Impressoes: 12.300\n🖱️ Cliques: 550",
   };
-  const r = await fetch(apiUrl("/api/message-templates/preview"), {
+  const r = await dashFetch(apiUrl("/api/message-templates/preview"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ content: payload.content || "", context: sampleContext }),
@@ -624,7 +636,7 @@ async function generateTemplatePreview() {
 }
 
 async function simulateHarness(clientId, scenario) {
-  const r = await fetch(apiUrl("/api/harness/simulate-webhook"), {
+  const r = await dashFetch(apiUrl("/api/harness/simulate-webhook"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ client_id: clientId, scenario }),

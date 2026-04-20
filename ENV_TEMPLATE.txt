@@ -1,74 +1,124 @@
-# Evolution API Configuration
-EVOLUTION_SERVER_URL=https://evo.nousdynamics.com/
-EVOLUTION_API_KEY=
-EVOLUTION_INSTANCE=
-
-# Meta Marketing API Configuration
-META_ACCESS_TOKEN=
-META_BUSINESS_ID=2126303521185590
-
-# Optional: Rate limiting and retry configuration
+# =============================================================================
+# P12 Relatórios — Ambiente Easypanel / Docker
+# =============================================================================
+# Como usar no Easypanel:
+#   1) Aba "Environment" do serviço: crie cada variável (nome = valor), OU
+#   2) Monte um ficheiro .env na raiz do contentor em /app/.env (o entrypoint usa-o se existir).
+# Não commite valores reais no Git. Este ficheiro é o modelo oficial.
+#
+# Ordem sugerida: preencher "Obrigatório para subir", depois Meta/Evolution, depois opcionais.
+#
+# -----------------------------------------------------------------------------
+# Núcleo do contentor
+# -----------------------------------------------------------------------------
+TZ=America/Sao_Paulo
+DRY_RUN=false
 MAX_RETRIES=3
 RETRY_DELAY_SECONDS=300
 
-# Optional: DRY_RUN mode (quando true, não envia WhatsApp; apenas gera e salva em .tmp/)
-DRY_RUN=false
+# -----------------------------------------------------------------------------
+# Obrigatório para o serviço subir com webhook + relatório + dashboard
+# -----------------------------------------------------------------------------
+# Evolution (WhatsApp)
+EVOLUTION_SERVER_URL=
+EVOLUTION_API_KEY=
+EVOLUTION_INSTANCE=
+# Alias aceite pelo código (opcional se já usas EVOLUTION_SERVER_URL)
+# EVOLUTION_URL=
 
-# Espelhamento do Ads Manager (atribuição/resultados)
-# action_report_time: impression | conversion | mixed
-META_ACTION_REPORT_TIME=conversion
-# Janelas de atribuição (csv): ex. 7d_click,1d_view
-META_ATTRIBUTION_WINDOWS=7d_click,1d_view
-# action_type principal para "Resultados" (ex.: lead)
-REPORT_RESULT_ACTION_TYPE=lead
+# Meta (Marketing API + relatório semanal multi-cliente)
+META_ACCESS_TOKEN=
+META_BUSINESS_ID=
 
-# Webhook n8n para notificar erros (token Meta expirado vs outros erros da automação).
-# Se vazio, usa a URL padrão do projeto (Easypanel / erro-relatorio).
-ERROR_WEBHOOK_URL=
-
-TZ=America/Sao_Paulo
-# Timezone para "é segunda-feira?" e fallback quando a conta Meta não expõe timezone_name
-DEFAULT_REPORT_TIMEZONE=America/Sao_Paulo
-
-# Relatorio semanal: cron na segunda 10:00 (Dockerfile). Forcar envio em qualquer dia (teste):
-# FORCE_WEEKLY_REPORT=1
-
-# Webhook leads Meta multi-cliente (Make -> POST /meta-new-lead -> WhatsApp grupo)
-# Porta HTTP interna do container (mapear no Easypanel para HTTPS).
+# Webhook Make → leads Meta (POST /meta-new-lead). Mapear HTTPS → WEBHOOK_PORT
 WEBHOOK_PORT=8080
+META_LEAD_WEBHOOK_SECRET=
 
-# Dashboard viva de clientes (Flask)
-# Dica: use domínio/subdomínio separado no Easypanel apontando para DASHBOARD_PORT.
+# -----------------------------------------------------------------------------
+# Dashboard (Pulseboard) — porta interna; no Easypanel expor HTTPS para esta porta
+# -----------------------------------------------------------------------------
 ENABLE_DASHBOARD=true
 DASHBOARD_PORT=8091
-# Segredo do webhook. Se preenchido, o Make deve enviar o mesmo valor em:
-# X-Webhook-Secret ou Authorization: Bearer <valor>.
-META_LEAD_WEBHOOK_SECRET=
-# Opcional: texto em "WhatsApp do Lead:" só quando o lead não tem número válido (sem dígitos).
-# Deixe vazio para mostrar "(não informado)" — use só se quiser um contato fixo operacional.
-META_LEAD_FALLBACK_WHATSAPP=
 
-# Compatibilidade legada (opcional):
-# - Se META_LEAD_WEBHOOK_SECRET estiver vazio, o webhook aceita LORENA_LEAD_WEBHOOK_SECRET.
-# - Se META_LEAD_FALLBACK_WHATSAPP estiver vazio, o webhook usa LORENA_FALLBACK_WHATSAPP.
+# Login da dashboard (recomendado em produção com HTTPS)
+# Mesmo DASHBOARD_SESSION_SECRET no processo que serve /dash se usares webhook na mesma app.
+DASHBOARD_SESSION_SECRET=
+FLASK_SECRET_KEY=
+DASHBOARD_AUTH_PASSWORD=
+
+# -----------------------------------------------------------------------------
+# Postgres / Supabase — dados persistentes (clientes, templates, filtros)
+# -----------------------------------------------------------------------------
+# URI do pooler em modo Transaction (Supabase: geralmente porta 6543).
+# Depois de criar as tabelas (SQL em supabase/migrations/001_initial_pulseboard.sql), no
+# primeiro arranque com BD vazio o contentor importa clients.json / google_clients.json / message_templates.json.
+DATABASE_URL=
+# Alternativa aceite pelo código:
+# SUPABASE_DATABASE_URL=
+
+# -----------------------------------------------------------------------------
+# Supabase Auth (futuro / login com e-mail Supabase)
+# -----------------------------------------------------------------------------
+# Hoje a dashboard usa só DASHBOARD_AUTH_PASSWORD (sessão Flask). Se mais tarde integrares
+# login Supabase no browser, uses anon key + RLS (não coloques service_role no front).
+#
+# No painel Supabase (Auth):
+#   - Authentication → Providers → Email: desative "Confirm email" (confirmação por e-mail),
+#     já que os utilizadores serão criados internamente.
+#   - Para não permitir registo público: Authentication → (conforme versão do painel)
+#     desative sign-ups ou restrinja a convites / criação só por API com service_role no servidor.
+#   - Site URL: URL pública da tua dashboard (ex.: https://dash.teudominio.com).
+
+# SUPABASE_URL=
+# SUPABASE_ANON_KEY=
+# SUPABASE_SERVICE_ROLE_KEY=
+
+# -----------------------------------------------------------------------------
+# Meta — relatório / Ads Manager (opcional; têm defaults no código)
+# -----------------------------------------------------------------------------
+META_ACTION_REPORT_TIME=conversion
+META_ATTRIBUTION_WINDOWS=7d_click,1d_view
+REPORT_RESULT_ACTION_TYPE=lead
+DEFAULT_REPORT_TIMEZONE=America/Sao_Paulo
+# Segunda-feira relatório semanal: use só para teste fora do dia certo
+# FORCE_WEEKLY_REPORT=0
+
+# -----------------------------------------------------------------------------
+# Webhook leads — opcional
+# -----------------------------------------------------------------------------
+META_LEAD_FALLBACK_WHATSAPP=
+META_LEAD_ALLOW_DEFAULT_NO_PAGE_FALLBACK=true
+
+# -----------------------------------------------------------------------------
+# Legado Lorena (só se ainda usares estes nomes no .env antigo)
+# -----------------------------------------------------------------------------
 LORENA_LEAD_WEBHOOK_SECRET=
 LORENA_FALLBACK_WHATSAPP=
 
-# INSTRUÇÕES:
-# 1. Copie este arquivo para .env
-# 2. Preencha todas as variáveis obrigatórias com seus valores reais
-# 3. O arquivo .env está no .gitignore por segurança
-# 
-# IMPORTANTE - Modo Multi-Client:
-# - META_BUSINESS_ID: ID do Business Manager (obrigatório para o cron principal:
-#   execution/main_scheduler.py lista contas do Business e cruza com clients.json)
-# - Novas contas de anúncio + grupos WhatsApp: edite clients.json na RAIZ do repo
-#   (um objeto por cliente: client_name, ad_account_id, group_id, enabled)
-# - No Docker/Easypanel: clients.json vai na imagem (git) ou monte um volume em /app/clients.json
-# - META_AD_ACCOUNT_ID / EVOLUTION_GROUP_ID: opcionais (scripts manuais e testes)
-#
-# PRODUÇÃO (Easypanel) — conferir também:
-# - META_ACTION_REPORT_TIME, META_ATTRIBUTION_WINDOWS, REPORT_RESULT_ACTION_TYPE (alinhamento com Ads Manager)
-# - WEBHOOK_PORT mapeado no proxy HTTPS; META_LEAD_WEBHOOK_SECRET para proteger o POST
-# - META_LEAD_FALLBACK_WHATSAPP opcional (senão mostra "(não informado)")
-# - Para roteamento de leads: cadastre no clients.json -> meta_page_id, lead_group_id, lead_template
+# -----------------------------------------------------------------------------
+# Erros / notificações
+# -----------------------------------------------------------------------------
+ERROR_WEBHOOK_URL=
+
+# -----------------------------------------------------------------------------
+# Google Ads — relatório multi-cliente (só se usares google_report_scheduler)
+# -----------------------------------------------------------------------------
+GOOGLE_ADS_CLIENT_ID=
+GOOGLE_ADS_CLIENT_SECRET=
+GOOGLE_ADS_REFRESH_TOKEN=
+GOOGLE_ADS_DEVELOPER_TOKEN=
+GOOGLE_ADS_LOGIN_CUSTOMER_ID=
+GOOGLE_ADS_API_VERSION=v20
+GOOGLE_REPORT_MAX_CAMPAIGNS=8
+
+# -----------------------------------------------------------------------------
+# Scripts / legado mono-cliente (opcional)
+# -----------------------------------------------------------------------------
+# META_AD_ACCOUNT_ID=
+# EVOLUTION_GROUP_ID=
+# REPORT_CLIENT_NAME=
+
+# =============================================================================
+# MCP Supabase (Cursor): se aparecer "read-only", não dá para aplicar DDL pelo MCP.
+# Aplique sempre: supabase/migrations/001_initial_pulseboard.sql no SQL Editor do projeto.
+# =============================================================================

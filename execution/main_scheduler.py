@@ -410,27 +410,30 @@ class P12RelatoriosReporter:
     
     def load_clients_config(self) -> List[Dict[str, Any]]:
         """
-        Carrega configuração de clientes do arquivo clients.json.
-        
-        Returns:
-            Lista de clientes configurados
-            
-        Raises:
-            FileNotFoundError: Se clients.json não existir
-            ValueError: Se formato do JSON estiver inválido
+        Carrega configuração de clientes do Postgres (DATABASE_URL) ou clients.json.
         """
-        clients_path = os.path.join(os.path.dirname(__file__), '..', 'clients.json')
-        
+        try:
+            from execution.persistence import db_enabled, ensure_db_ready, list_meta_clients
+
+            if db_enabled():
+                ensure_db_ready()
+                rows = list_meta_clients()
+                return [{k: v for k, v in r.items() if k != "id"} for r in rows]
+        except Exception:
+            pass
+
+        clients_path = os.path.join(os.path.dirname(__file__), "..", "clients.json")
+
         if not os.path.exists(clients_path):
             raise FileNotFoundError(f"Arquivo clients.json não encontrado em {clients_path}")
-        
+
         try:
-            with open(clients_path, 'r', encoding='utf-8') as f:
+            with open(clients_path, "r", encoding="utf-8") as f:
                 clients = json.load(f)
-            
+
             if not isinstance(clients, list):
                 raise ValueError("clients.json deve conter uma lista de clientes")
-            
+
             return clients
         except json.JSONDecodeError as e:
             raise ValueError(f"Erro ao parsear clients.json: {str(e)}")

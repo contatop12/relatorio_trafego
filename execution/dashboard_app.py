@@ -10,15 +10,20 @@ Recursos:
 
 from __future__ import annotations
 
+import hmac
 import json
 import os
 import re
+import secrets
 import threading
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import quote
 
-from flask import Flask, Response, jsonify, render_template, request
+from flask import Flask, Response, jsonify, redirect, render_template, request, session, url_for
+
+from execution import persistence
 
 from execution.live_events import (
     get_events_file_path,
@@ -38,6 +43,11 @@ app = Flask(
     template_folder=os.path.join(os.path.dirname(__file__), "..", "templates"),
     static_folder=os.path.join(os.path.dirname(__file__), "..", "static"),
 )
+app.secret_key = (
+    os.environ.get("DASHBOARD_SESSION_SECRET")
+    or os.environ.get("FLASK_SECRET_KEY")
+    or secrets.token_hex(32)
+)
 
 _CLIENTS_LOCK = threading.Lock()
 _GOOGLE_CLIENTS_LOCK = threading.Lock()
@@ -52,42 +62,80 @@ def _google_clients_path() -> str:
 
 
 def _load_clients() -> List[Dict[str, Any]]:
+    if persistence.db_enabled():
+        persistence.ensure_db_ready()
+        return persistence.list_meta_clients()
     path = _clients_path()
     if not os.path.exists(path):
         return []
     with _CLIENTS_LOCK:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
-    if isinstance(data, list):
-        return [c for c in data if isinstance(c, dict)]
-    return []
+    if not isinstance(data, list):
+        return []
+    out: List[Dict[str, Any]] = []
+    for idx, c in enumerate(data):
+        if not isinstance(c, dict):
+            continue
+        row = dict(c)
+        row["id"] = idx
+        out.append(row)
+    return out
 
 
 def _save_clients(clients: List[Dict[str, Any]]) -> None:
+    if persistence.db_enabled():
+        raise RuntimeError("use_persistence_insert_update")
     path = _clients_path()
+    serializable = []
+    for c in clients:
+        if not isinstance(c, dict):
+            continue
+        serializable.append({k: v for k, v in c.items() if k != "id"})
     with _CLIENTS_LOCK:
         with open(path, "w", encoding="utf-8") as f:
-            json.dump(clients, f, ensure_ascii=False, indent=2)
+            json.dump(serializable, f, ensure_ascii=False, indent=2)
             f.write("\n")
 
 
 def _load_google_clients() -> List[Dict[str, Any]]:
+    if persistence.db_enabled():
+        persistence.ensure_db_ready()
+        return persistence.list_google_clients()
     path = _google_clients_path()
     if not os.path.exists(path):
         return []
     with _GOOGLE_CLIENTS_LOCK:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
-    if isinstance(data, list):
-        return [c for c in data if isinstance(c, dict)]
-    return []
+    if not isinstance(data, list):
+        return []
+    out: List[Dict[str, Any]] = []
+    for idx, c in enumerate(data):
+        if not isinstance(c, dict):
+            continue
+        row = dict(c)
+        row.pop("id", None)
+        row["id"] = idx
+        out.append(row)
+    return out
 
 
 def _save_google_clients(clients: List[Dict[str, Any]]) -> None:
+    if persistence.db_enabled():
+        raise RuntimeError("use_persistence_insert_update")
     path = _google_clients_path()
+    serializable: List[Dict[str, Any]] = []
+    for c in clients:
+        if not isinstance(c, dict):
+            continue
+        d = dict(c)
+        if isinstance(d.get("id"), int):
+            d.pop("id", None)
+        serializable.append(d)
     with _GOOGLE_CLIENTS_LOCK:
         with open(path, "w", encoding="utf-8") as f:
-            json.dump(clients, f, ensure_ascii=False, indent=2)
+            json.dump(serializable, f, ensure_ascii=False, indent=2)
             f.write("\n")
 
 
@@ -185,12 +233,13 @@ def _validate_google_client(client: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _public_google_client_payload(index: int, raw: Dict[str, Any]) -> Dict[str, Any]:
+def _public_google_client_payload(raw: Dict[str, Any]) -> Dict[str, Any]:
     primary = raw.get("primary_conversions")
     if not isinstance(primary, list):
         primary = []
+    gid = int(raw["id"])
     client = {
-        "id": index,
+        "id": gid,
         "client_name": str(raw.get("client_name", "")).strip(),
         "google_customer_id": _normalize_google_customer_id(str(raw.get("google_customer_id", "")).strip()),
         "group_id": str(raw.get("group_id", "")).strip(),
@@ -214,7 +263,8 @@ def _latest_events_by_client(limit: int = 300, per_client: int = 25) -> Dict[str
     return grouped
 
 
-def _public_client_payload(index: int, raw: Dict[str, Any], events_map: Dict[str, List[Dict[str, Any]]]) -> Dict[str, Any]:
+def _public_client_payload(raw: Dict[str, Any], events_map: Dict[str, List[Dict[str, Any]]]) -> Dict[str, Any]:
+    cid = int(raw["id"])
     client = {
         "client_name": str(raw.get("client_name", "")).strip(),
         "ad_account_id": _normalize_act_id(str(raw.get("ad_account_id", ""))),
@@ -231,7 +281,7 @@ def _public_client_payload(index: int, raw: Dict[str, Any], events_map: Dict[str
     checks = _validate_client(client)
     client_events = events_map.get(client["client_name"], [])
     return {
-        "id": index,
+        "id": cid,
         **client,
         "checks": checks,
         "events": client_events,
@@ -241,7 +291,7 @@ def _public_client_payload(index: int, raw: Dict[str, Any], events_map: Dict[str
 def _build_clients_response() -> Dict[str, Any]:
     clients = _load_clients()
     events_map = _latest_events_by_client()
-    payload = [_public_client_payload(i, c, events_map) for i, c in enumerate(clients)]
+    payload = [_public_client_payload(c, events_map) for c in clients]
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "clients": payload,
@@ -251,7 +301,7 @@ def _build_clients_response() -> Dict[str, Any]:
 
 def _build_google_clients_response() -> Dict[str, Any]:
     clients = _load_google_clients()
-    payload = [_public_google_client_payload(i, c) for i, c in enumerate(clients)]
+    payload = [_public_google_client_payload(c) for c in clients]
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "clients": payload,
@@ -298,6 +348,79 @@ def _run_flow_async(client: Dict[str, Any], scenario: str) -> None:
     t.start()
 
 
+def _dashboard_auth_password() -> str:
+    return (os.environ.get("DASHBOARD_AUTH_PASSWORD") or "").strip()
+
+
+def verify_dashboard_password(sent: str) -> bool:
+    pwd = _dashboard_auth_password()
+    return bool(pwd) and hmac.compare_digest(sent or "", pwd)
+
+
+def dashboard_auth_gate_response() -> Optional[Any]:
+    """
+    Retorno None = seguir request. Usado pelo Flask da dashboard (porta 8091)
+    e pelo webhook em rotas /dash/* (mesmo DASHBOARD_SESSION_SECRET para o cookie).
+    """
+    pwd = _dashboard_auth_password()
+    if not pwd:
+        return None
+    raw = request.path or ""
+    if raw.startswith("/static/"):
+        return None
+    if raw.rstrip("/") in ("/api/health", "/dash/api/health"):
+        return None
+    base = raw.rstrip("/") or "/"
+    if base in ("/login", "/dash/login", "/logout", "/dash/logout"):
+        return None
+    if session.get("dashboard_ok"):
+        return None
+    if raw.startswith("/api/") or raw.startswith("/dash/api/"):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    if raw.startswith("/dash"):
+        return redirect(f"/dash/login?next={quote(raw, safe='')}")
+    return redirect(url_for("login", next=raw))
+
+
+@app.before_request
+def _dashboard_auth_gate() -> Optional[Any]:
+    return dashboard_auth_gate_response()
+
+
+@app.get("/login")
+def login() -> str:
+    next_url = request.args.get("next") or "/"
+    return render_template("login.html", next_url=next_url, error=None, form_action=url_for("login_post"))
+
+
+@app.post("/login")
+def login_post() -> Any:
+    next_url = (request.form.get("next") or "/").strip() or "/"
+    if not _dashboard_auth_password():
+        return redirect(next_url)
+    sent = request.form.get("password") or ""
+    if verify_dashboard_password(sent):
+        session["dashboard_ok"] = True
+        return redirect(next_url)
+    return render_template(
+        "login.html",
+        next_url=next_url,
+        error="Senha incorreta.",
+        form_action=url_for("login_post"),
+    )
+
+
+@app.get("/logout")
+def logout() -> Any:
+    session.clear()
+    return redirect(url_for("login"))
+
+
+@app.get("/api/health")
+def api_health() -> Any:
+    return jsonify({"ok": True, "db": persistence.db_enabled()})
+
+
 @app.get("/")
 def dashboard_home() -> str:
     return render_template("dashboard.html", dashboard_base="")
@@ -331,7 +454,6 @@ def api_add_client() -> Any:
     if not group_id:
         return jsonify({"ok": False, "error": "group_id_obrigatorio"}), 400
 
-    clients = _load_clients()
     new_client = {
         "client_name": client_name,
         "ad_account_id": ad_account_id,
@@ -345,8 +467,18 @@ def api_add_client() -> Any:
         "lead_exclude_regex": lead_exclude_regex,
         "enabled": enabled,
     }
-    clients.append(new_client)
-    _save_clients(clients)
+    if persistence.db_enabled():
+        persistence.ensure_db_ready()
+        new_id = persistence.insert_meta_client(new_client)
+        fresh = persistence.get_meta_client(new_id)
+        if not fresh:
+            return jsonify({"ok": False, "error": "falha_ao_ler_cliente"}), 500
+    else:
+        clients = _load_clients()
+        clients.append(new_client)
+        new_id = len(clients) - 1
+        fresh = {**new_client, "id": new_id}
+        _save_clients(clients)
 
     publish_event(
         source="dashboard_app",
@@ -359,17 +491,24 @@ def api_add_client() -> Any:
         group_id=group_id,
     )
 
-    return jsonify({"ok": True, "client": _public_client_payload(len(clients) - 1, new_client, _latest_events_by_client())})
+    return jsonify({"ok": True, "client": _public_client_payload(fresh, _latest_events_by_client())})
 
 
 @app.put("/api/clients/<int:client_id>")
 def api_update_client(client_id: int) -> Any:
     payload = request.get_json(silent=True) or {}
-    clients = _load_clients()
-    if client_id < 0 or client_id >= len(clients):
-        return jsonify({"ok": False, "error": "cliente_nao_encontrado"}), 404
+    if persistence.db_enabled():
+        persistence.ensure_db_ready()
+        current = persistence.get_meta_client(client_id)
+        if not current:
+            return jsonify({"ok": False, "error": "cliente_nao_encontrado"}), 404
+        current = dict(current)
+    else:
+        clients = _load_clients()
+        if client_id < 0 or client_id >= len(clients):
+            return jsonify({"ok": False, "error": "cliente_nao_encontrado"}), 404
+        current = dict(clients[client_id])
 
-    current = clients[client_id]
     updatable_fields = {
         "client_name",
         "ad_account_id",
@@ -395,20 +534,27 @@ def api_update_client(client_id: int) -> Any:
         else:
             current[key] = str(payload[key]).strip()
 
-    clients[client_id] = current
-    _save_clients(clients)
+    if persistence.db_enabled():
+        persistence.update_meta_client(client_id, current)
+        fresh = persistence.get_meta_client(client_id) or current
+    else:
+        clients = _load_clients()
+        current["id"] = client_id
+        clients[client_id] = current
+        _save_clients(clients)
+        fresh = current
 
     publish_event(
         source="dashboard_app",
         stage="CLIENTE_ATUALIZADO",
         status="info",
         detail="Cliente atualizado via dashboard",
-        client_name=str(current.get("client_name", "")).strip(),
-        ad_account_id=str(current.get("ad_account_id", "")).strip(),
-        page_id=str(current.get("meta_page_id", "")).strip(),
-        group_id=str(current.get("group_id", "")).strip(),
+        client_name=str(fresh.get("client_name", "")).strip(),
+        ad_account_id=str(fresh.get("ad_account_id", "")).strip(),
+        page_id=str(fresh.get("meta_page_id", "")).strip(),
+        group_id=str(fresh.get("group_id", "")).strip(),
     )
-    return jsonify({"ok": True, "client": _public_client_payload(client_id, current, _latest_events_by_client())})
+    return jsonify({"ok": True, "client": _public_client_payload(fresh, _latest_events_by_client())})
 
 
 @app.get("/api/google-clients")
@@ -440,9 +586,7 @@ def api_add_google_client() -> Any:
     if not group_id:
         return jsonify({"ok": False, "error": "group_id_obrigatorio"}), 400
 
-    clients = _load_google_clients()
     new_client = {
-        "id": re.sub(r"[^a-z0-9_]+", "_", client_name.lower()).strip("_") or f"google_{len(clients)+1}",
         "client_name": client_name,
         "google_customer_id": google_customer_id,
         "group_id": group_id,
@@ -451,8 +595,21 @@ def api_add_google_client() -> Any:
         "notes": notes,
         "google_template": google_template,
     }
-    clients.append(new_client)
-    _save_google_clients(clients)
+    if persistence.db_enabled():
+        persistence.ensure_db_ready()
+        new_id = persistence.insert_google_client(new_client)
+        fresh = persistence.get_google_client(new_id)
+        if not fresh:
+            return jsonify({"ok": False, "error": "falha_ao_ler_cliente"}), 500
+    else:
+        clients = _load_google_clients()
+        slug = re.sub(r"[^a-z0-9_]+", "_", client_name.lower()).strip("_") or f"google_{len(clients) + 1}"
+        row_to_file = {**new_client, "id": slug}
+        clients.append(row_to_file)
+        new_id = len(clients) - 1
+        fresh = {**new_client, "id": new_id}
+        _save_google_clients(clients)
+
     publish_event(
         source="dashboard_app",
         stage="GOOGLE_CLIENTE_ADICIONADO",
@@ -461,16 +618,24 @@ def api_add_google_client() -> Any:
         client_name=client_name,
         group_id=group_id,
     )
-    return jsonify({"ok": True, "client": _public_google_client_payload(len(clients) - 1, new_client)})
+    return jsonify({"ok": True, "client": _public_google_client_payload(fresh)})
 
 
 @app.put("/api/google-clients/<int:client_id>")
 def api_update_google_client(client_id: int) -> Any:
     payload = request.get_json(silent=True) or {}
-    clients = _load_google_clients()
-    if client_id < 0 or client_id >= len(clients):
-        return jsonify({"ok": False, "error": "cliente_nao_encontrado"}), 404
-    current = clients[client_id]
+    if persistence.db_enabled():
+        persistence.ensure_db_ready()
+        current = persistence.get_google_client(client_id)
+        if not current:
+            return jsonify({"ok": False, "error": "cliente_nao_encontrado"}), 404
+        current = dict(current)
+    else:
+        clients = _load_google_clients()
+        if client_id < 0 or client_id >= len(clients):
+            return jsonify({"ok": False, "error": "cliente_nao_encontrado"}), 404
+        current = dict(clients[client_id])
+
     updatable = {
         "client_name",
         "google_customer_id",
@@ -497,17 +662,26 @@ def api_update_google_client(client_id: int) -> Any:
                 current[key] = []
         else:
             current[key] = str(payload[key]).strip()
-    clients[client_id] = current
-    _save_google_clients(clients)
+
+    if persistence.db_enabled():
+        persistence.update_google_client(client_id, current)
+        fresh = persistence.get_google_client(client_id) or current
+    else:
+        clients = _load_google_clients()
+        current["id"] = client_id
+        clients[client_id] = current
+        _save_google_clients(clients)
+        fresh = current
+
     publish_event(
         source="dashboard_app",
         stage="GOOGLE_CLIENTE_ATUALIZADO",
         status="info",
         detail="Cliente Google Ads atualizado via dashboard",
-        client_name=str(current.get("client_name", "")).strip(),
-        group_id=str(current.get("group_id", "")).strip(),
+        client_name=str(fresh.get("client_name", "")).strip(),
+        group_id=str(fresh.get("group_id", "")).strip(),
     )
-    return jsonify({"ok": True, "client": _public_google_client_payload(client_id, current)})
+    return jsonify({"ok": True, "client": _public_google_client_payload(fresh)})
 
 
 @app.get("/api/message-templates")
@@ -578,10 +752,13 @@ def api_harness_simulate_webhook() -> Any:
         return jsonify({"ok": False, "error": "scenario_invalido"}), 400
 
     clients = _load_clients()
-    if not isinstance(client_id, int) or client_id < 0 or client_id >= len(clients):
+    target: Optional[Dict[str, Any]] = None
+    for c in clients:
+        if int(c.get("id", -1)) == int(client_id):
+            target = c
+            break
+    if not target:
         return jsonify({"ok": False, "error": "client_id_invalido"}), 400
-
-    target = clients[client_id]
     _run_flow_async(target, scenario)
     return jsonify(
         {

@@ -125,7 +125,31 @@ def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any
     return out
 
 
+def _use_db_templates() -> bool:
+    try:
+        from execution.persistence import db_enabled
+
+        return db_enabled()
+    except Exception:
+        return False
+
+
+def _channels_from_raw(raw: Dict[str, Any]) -> Dict[str, Any]:
+    return {k: v for k, v in raw.items() if k != "filters" and isinstance(v, dict)}
+
+
 def load_templates() -> Dict[str, Dict[str, Dict[str, str]]]:
+    if _use_db_templates():
+        from execution.persistence import ensure_db_ready, get_message_templates_body
+
+        ensure_db_ready()
+        raw = get_message_templates_body()
+        if not isinstance(raw, dict):
+            return deepcopy(DEFAULT_TEMPLATES)
+        merged = _deep_merge(DEFAULT_TEMPLATES, _channels_from_raw(raw))
+        merged.pop("filters", None)
+        return merged
+
     path = _templates_path()
     if not os.path.exists(path):
         return deepcopy(DEFAULT_TEMPLATES)
@@ -136,10 +160,18 @@ def load_templates() -> Dict[str, Dict[str, Dict[str, str]]]:
         return deepcopy(DEFAULT_TEMPLATES)
     if not isinstance(raw, dict):
         return deepcopy(DEFAULT_TEMPLATES)
-    return _deep_merge(DEFAULT_TEMPLATES, raw)
+    merged = _deep_merge(DEFAULT_TEMPLATES, _channels_from_raw(raw))
+    merged.pop("filters", None)
+    return merged
 
 
 def save_templates(data: Dict[str, Dict[str, Dict[str, str]]]) -> None:
+    if _use_db_templates():
+        from execution.persistence import save_template_channels
+
+        save_template_channels(data)
+        return
+
     path = _templates_path()
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
@@ -196,8 +228,30 @@ def get_template_content(channel: str, template_id: str) -> str:
 
 
 def load_filter_rules() -> Dict[str, Dict[str, Any]]:
-    path = _templates_path()
     base = deepcopy(DEFAULT_FILTER_RULES)
+    if _use_db_templates():
+        from execution.persistence import ensure_db_ready, get_message_templates_body
+
+        ensure_db_ready()
+        raw = get_message_templates_body()
+        if not isinstance(raw, dict):
+            return base
+        candidate = raw.get("filters")
+        if isinstance(candidate, dict):
+            for channel, channel_rules in candidate.items():
+                if not isinstance(channel_rules, dict):
+                    continue
+                merged = base.setdefault(
+                    channel,
+                    {"exclude_exact": [], "exclude_contains": [], "exclude_regex": []},
+                )
+                for key in ("exclude_exact", "exclude_contains", "exclude_regex"):
+                    vals = channel_rules.get(key)
+                    if isinstance(vals, list):
+                        merged[key] = [str(v).strip() for v in vals if str(v).strip()]
+        return base
+
+    path = _templates_path()
     if not os.path.exists(path):
         return base
     try:
@@ -242,8 +296,28 @@ def upsert_filter_rules(
     exclude_contains: list[str],
     exclude_regex: list[str],
 ) -> Dict[str, Any]:
+    filters_entry = {
+        "exclude_exact": [str(v).strip() for v in exclude_exact if str(v).strip()],
+        "exclude_contains": [str(v).strip() for v in exclude_contains if str(v).strip()],
+        "exclude_regex": [str(v).strip() for v in exclude_regex if str(v).strip()],
+    }
+
+    if _use_db_templates():
+        from execution.persistence import get_message_templates_body, save_message_templates_body
+
+        data = get_message_templates_body()
+        if not isinstance(data, dict):
+            data = {}
+        filters = data.get("filters")
+        if not isinstance(filters, dict):
+            filters = {}
+        filters[channel] = filters_entry
+        data["filters"] = filters
+        save_message_templates_body(data)
+        return filters_entry
+
     path = _templates_path()
-    data: Dict[str, Any] = {}
+    data = {}
     if os.path.exists(path):
         try:
             with open(path, "r", encoding="utf-8") as f:
@@ -255,13 +329,9 @@ def upsert_filter_rules(
     filters = data.get("filters")
     if not isinstance(filters, dict):
         filters = {}
-    filters[channel] = {
-        "exclude_exact": [str(v).strip() for v in exclude_exact if str(v).strip()],
-        "exclude_contains": [str(v).strip() for v in exclude_contains if str(v).strip()],
-        "exclude_regex": [str(v).strip() for v in exclude_regex if str(v).strip()],
-    }
+    filters[channel] = filters_entry
     data["filters"] = filters
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
         f.write("\n")
-    return filters[channel]
+    return filters_entry
