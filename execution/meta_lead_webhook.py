@@ -982,7 +982,7 @@ def _handle_meta_new_lead(endpoint_label: str, allow_legacy_lorena_fallback: boo
             client = get_evolution_client()
             if client.send_text_message(group_id, message):
                 _wh_log(
-                    f"LEAD_{idx} | WHATSAPP_ENVIADO_OK | cliente={route['client_name']} | page_id={page_id}"
+                    f"LEAD_{idx} | WHATSAPP_ENVIADO_OK | cliente={route['client_name']} | page_id={page_id} | group_id={group_id}"
                 )
                 sent += 1
                 _emit_runtime_event(

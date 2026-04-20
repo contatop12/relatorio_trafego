@@ -6,10 +6,11 @@ via WhatsApp através da Evolution API, com tratamento de erros e retries.
 """
 
 import os
+import re
 import requests
 import time
 import logging
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional, Tuple
 
 # Configuração de logging
 log_file = os.path.join(os.path.dirname(__file__), '..', '.tmp', 'execution.log')
@@ -23,6 +24,58 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+_ERR_HINT = re.compile(
+    r"\b(fail|erro|error|invalid|not found|inexistente|not in group|not joined)\b", re.IGNORECASE
+)
+
+
+def _unwrap_response_payload(data: Any) -> Dict[str, Any]:
+    if not isinstance(data, dict):
+        return {}
+    inner = data.get("data")
+    if isinstance(inner, dict) and ("key" in inner or "message" in inner or "error" in inner):
+        return inner
+    return data
+
+
+def _send_text_outcome(data: Any) -> Tuple[bool, str]:
+    """
+    Interpreta JSON da Evolution após sendText. Evita tratar 'message' genérico como sucesso
+    (algumas versões devolvem 200 com corpo de erro em string).
+    """
+    d = _unwrap_response_payload(data)
+    if not d:
+        return False, "corpo vazio ou nao-JSON"
+    if d.get("error") in (True, "true", 1, "1") or d.get("status") == "error":
+        return False, f"api error: {d.get('message', d)}"
+    for err_key in ("errors", "exception", "err"):
+        if d.get(err_key):
+            return False, f"campo {err_key}={d.get(err_key)}"
+    m_str = d.get("message")
+    if isinstance(m_str, str) and m_str and _ERR_HINT.search(m_str) and "extendedText" not in m_str.lower():
+        if len(m_str) < 400 and not d.get("key"):
+            return False, f"message suspeita: {m_str[:200]}"
+
+    key = d.get("key")
+    if isinstance(key, dict) and (key.get("id") or key.get("remoteJid")):
+        rj = str(key.get("remoteJid") or "")
+        mid = str(key.get("id") or "")
+        brief = f"remoteJid={rj} id={mid[:24]}{'...' if len(mid) > 24 else ''}"
+        return True, brief
+
+    msg = d.get("message")
+    if isinstance(msg, dict) and (msg.get("extendedTextMessage") or msg.get("conversation")):
+        return True, "message.estruturado(whatsapp)"
+    st = d.get("status")
+    if st is not None and str(st).upper() in ("PENDING", "SERVER_ACK", "DELIVERED", "SENT", "READ"):
+        return True, f"status={st}"
+
+    rj_top = d.get("remoteJid")
+    if rj_top:
+        return True, f"remoteJid_raiz={rj_top!s}"
+
+    return False, f"sem key.id/remoteJid (keys={list(d.keys())[:10]})"
 
 
 class EvolutionAPIClient:
@@ -139,19 +192,24 @@ class EvolutionAPIClient:
                 response.raise_for_status()
                 
                 data = response.json()
-                
-                # Verifica resposta da Evolution API
-                if data.get('key') or data.get('message'):
-                    logger.info(f"Mensagem enviada com sucesso para grupo {group_id}")
+                ok, detail = _send_text_outcome(data)
+                if ok:
+                    logger.info(
+                        "Mensagem enviada com sucesso para grupo %s | %s",
+                        group_id,
+                        detail,
+                    )
                     return True
-                else:
-                    error_msg = data.get('message', 'Erro desconhecido')
-                    logger.warning(f"Erro ao enviar mensagem (tentativa {attempt}/{self.max_retries}): {error_msg}")
-                    if attempt < self.max_retries:
-                        time.sleep(self.retry_delay)
-                        continue
-                    else:
-                        raise requests.RequestException(f"Falha ao enviar mensagem após {self.max_retries} tentativas: {error_msg}")
+
+                err_hint = data if isinstance(data, dict) else str(data)[:400]
+                logger.warning(
+                    "Resposta Evolution sem key/id de mensagem (grupo=%s): %s | corpo=%s",
+                    group_id,
+                    detail,
+                    err_hint,
+                )
+                # Não usar RETRY_DELAY longo para corpo JSON estranho — falha rápida.
+                return False
                         
             except requests.Timeout:
                 logger.warning(f"Timeout ao enviar mensagem (tentativa {attempt}/{self.max_retries})")
