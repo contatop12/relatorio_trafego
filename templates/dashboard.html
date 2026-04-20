@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>P12 Pulseboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Manrope:wght@400;500;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}" />
+  </head>
+  <body>
+    <div class="noise"></div>
+    <main class="shell">
+      <header class="hero">
+        <div>
+          <p class="kicker">P12 RELATÓRIOS · OPERAÇÃO AO VIVO</p>
+          <h1>Pulseboard de Automações</h1>
+          <p class="subtitle">
+            Veja quais clientes estão ativos, valide mapeamentos e acompanhe o fluxo de execução
+            do webhook em tempo real.
+          </p>
+        </div>
+        <div class="hero-badge">
+          <span id="connectionDot" class="dot pending"></span>
+          <strong id="connectionLabel">Conectando stream...</strong>
+        </div>
+      </header>
+
+      <section class="panel panel-form">
+        <div class="panel-title-wrap">
+          <h2>Novo cliente</h2>
+          <p>Cadastro direto em <code>clients.json</code>.</p>
+        </div>
+        <form id="newClientForm" class="new-client-grid">
+          <label>
+            Nome do cliente
+            <input name="client_name" required placeholder="Ex.: Lorena Carvalho" />
+          </label>
+          <label>
+            Conta Meta
+            <input name="ad_account_id" required placeholder="act_123456789" />
+          </label>
+          <label>
+            Grupo relatório
+            <input name="group_id" required placeholder="1203...@g.us" />
+          </label>
+          <label>
+            Meta page id
+            <input name="meta_page_id" placeholder="102086421781424" />
+          </label>
+          <label>
+            Grupo leads
+            <input name="lead_group_id" placeholder="1203...@g.us" />
+          </label>
+          <label>
+            Template lead
+            <select name="lead_template">
+              <option value="default">default</option>
+              <option value="lorena">lorena</option>
+              <option value="pratical_life">pratical_life</option>
+            </select>
+          </label>
+          <label class="check">
+            <input type="checkbox" name="enabled" checked />
+            <span>Automação ativa</span>
+          </label>
+          <button type="submit" class="primary">Adicionar cliente</button>
+        </form>
+        <p id="formFeedback" class="feedback"></p>
+      </section>
+
+      <section class="stats" id="statsRow"></section>
+
+      <section>
+        <div class="panel-title-wrap list-header">
+          <h2>Clientes monitorados</h2>
+          <button id="refreshBtn" class="ghost">Atualizar</button>
+        </div>
+        <div id="clientsGrid" class="clients-grid"></div>
+      </section>
+    </main>
+
+    <template id="clientCardTemplate">
+      <article class="client-card">
+        <div class="client-main">
+          <div class="client-head">
+            <h3 class="client-name"></h3>
+            <span class="status-pill"></span>
+          </div>
+          <dl class="meta-grid">
+            <div><dt>Conta</dt><dd class="f-ad_account_id"></dd></div>
+            <div><dt>Grupo relatório</dt><dd class="f-group_id"></dd></div>
+            <div><dt>Page ID</dt><dd class="f-meta_page_id"></dd></div>
+            <div><dt>Grupo lead</dt><dd class="f-lead_group_id"></dd></div>
+            <div><dt>Template</dt><dd class="f-lead_template"></dd></div>
+            <div><dt>Enabled</dt><dd class="f-enabled"></dd></div>
+          </dl>
+          <div class="checks"></div>
+          <div class="actions">
+            <button data-scenario="success" class="small action-ok">Harness sucesso</button>
+            <button data-scenario="send_fail" class="small action-warn">Harness falha envio</button>
+            <button data-scenario="route_fail" class="small action-err">Harness falha rota</button>
+          </div>
+        </div>
+        <aside class="flow-rail">
+          <h4>Fluxo em tempo real</h4>
+          <ul class="event-list"></ul>
+        </aside>
+      </article>
+    </template>
+
+    <script src="{{ url_for('static', filename='dashboard.js') }}" defer></script>
+  </body>
+</html>

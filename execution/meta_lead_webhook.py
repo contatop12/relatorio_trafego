@@ -23,6 +23,7 @@ from flask import Flask, jsonify, request
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from execution.evolution_client import get_evolution_client
+from execution.live_events import publish_event
 
 log_dir = os.path.join(os.path.dirname(__file__), "..", ".tmp")
 os.makedirs(log_dir, exist_ok=True)
@@ -66,6 +67,28 @@ def _emoji_for_log(message: str) -> str:
 
 def _wh_log(message: str, level: int = logging.INFO) -> None:
     logger.log(level, "%s %s %s", LOG_PREFIX, _emoji_for_log(message), message)
+
+
+def _emit_runtime_event(
+    *,
+    stage: str,
+    status: str,
+    detail: str,
+    client_name: str = "",
+    page_id: str = "",
+    group_id: str = "",
+    payload: Optional[Dict[str, Any]] = None,
+) -> None:
+    publish_event(
+        source="meta_lead_webhook",
+        stage=stage,
+        status=status,
+        detail=detail,
+        client_name=client_name,
+        page_id=page_id,
+        group_id=group_id,
+        payload=payload,
+    )
 
 
 def _client_ip() -> str:
@@ -568,11 +591,28 @@ def _handle_meta_new_lead(endpoint_label: str, allow_legacy_lorena_fallback: boo
             f"ip={_client_ip()} | content_length={request.content_length}",
             level=logging.WARNING,
         )
+        _emit_runtime_event(
+            stage="NEGADO_AUTH",
+            status="warning",
+            detail=f"{endpoint_label} bloqueado por segredo do webhook",
+            payload={"endpoint": endpoint_label, "ip": _client_ip()},
+        )
         return denied
 
     _wh_log(
         f"POST {endpoint_label} | RECEBIDO | "
         f"ip={_client_ip()} | content_type={request.content_type!r} | content_length={request.content_length}"
+    )
+    _emit_runtime_event(
+        stage="RECEBIDO",
+        status="info",
+        detail=f"{endpoint_label} recebeu requisição",
+        payload={
+            "endpoint": endpoint_label,
+            "ip": _client_ip(),
+            "content_type": request.content_type or "",
+            "content_length": request.content_length or 0,
+        },
     )
 
     raw, parse_err = parse_incoming_payload()
@@ -581,6 +621,12 @@ def _handle_meta_new_lead(endpoint_label: str, allow_legacy_lorena_fallback: boo
             f"POST {endpoint_label} | ERRO_JSON | "
             f"ip={_client_ip()} | motivo={parse_err}",
             level=logging.WARNING,
+        )
+        _emit_runtime_event(
+            stage="ERRO_JSON",
+            status="error",
+            detail=f"payload inválido em {endpoint_label}",
+            payload={"endpoint": endpoint_label, "parse_err": parse_err},
         )
         return (
             jsonify(
@@ -596,6 +642,12 @@ def _handle_meta_new_lead(endpoint_label: str, allow_legacy_lorena_fallback: boo
     events = normalize_lead_events(raw)
     if not events:
         _wh_log(f"POST {endpoint_label} | ERRO_PAYLOAD | nenhum lead extraido", level=logging.WARNING)
+        _emit_runtime_event(
+            stage="ERRO_PAYLOAD",
+            status="error",
+            detail=f"nenhum lead extraído em {endpoint_label}",
+            payload={"endpoint": endpoint_label},
+        )
         return (
             jsonify(
                 {
@@ -608,6 +660,12 @@ def _handle_meta_new_lead(endpoint_label: str, allow_legacy_lorena_fallback: boo
         )
 
     _wh_log(f"POST {endpoint_label} | PAYLOAD_OK | leads={len(events)}")
+    _emit_runtime_event(
+        stage="PAYLOAD_OK",
+        status="ok",
+        detail=f"{len(events)} lead(s) normalizado(s)",
+        payload={"endpoint": endpoint_label, "leads": len(events)},
+    )
 
     dry = os.getenv("DRY_RUN", "false").lower() == "true"
     sent = 0
@@ -634,30 +692,81 @@ def _handle_meta_new_lead(endpoint_label: str, allow_legacy_lorena_fallback: boo
                 _wh_log(
                     f"LEAD_{idx} | FALLBACK_LEGADO_APLICADO | endpoint={endpoint_label} | cliente={route['client_name']}"
                 )
+                _emit_runtime_event(
+                    stage="FALLBACK_LEGADO_APLICADO",
+                    status="warning",
+                    detail="Roteamento sem page_id via fallback legado",
+                    client_name=route["client_name"],
+                    page_id=page_id,
+                    group_id=route["group_id"],
+                    payload={"lead_index": idx, "endpoint": endpoint_label},
+                )
         if not route:
             skipped.append(f"lead_index_{idx}: page_id_nao_mapeado ({page_id or 'vazio'})")
             _wh_log(
                 f"LEAD_{idx} | IGNORADO_ROUTE | page_id_nao_mapeado={page_id or 'vazio'}",
                 level=logging.WARNING,
             )
+            _emit_runtime_event(
+                stage="IGNORADO_ROUTE",
+                status="warning",
+                detail="Lead ignorado por page_id não mapeado",
+                page_id=page_id,
+                payload={"lead_index": idx, "endpoint": endpoint_label},
+            )
             continue
 
         group_id = route["group_id"]
+        _emit_runtime_event(
+            stage="ROTA_RESOLVIDA",
+            status="ok",
+            detail=f"Cliente resolvido: {route['client_name']}",
+            client_name=route["client_name"],
+            page_id=page_id,
+            group_id=group_id,
+            payload={"lead_index": idx, "template": route.get("template", "")},
+        )
         if not group_id:
             skipped.append(f"lead_index_{idx}: group_id_ausente ({route['client_name']})")
             _wh_log(
                 f"LEAD_{idx} | IGNORADO_CONFIG | group_id_ausente | cliente={route['client_name']}",
                 level=logging.WARNING,
             )
+            _emit_runtime_event(
+                stage="IGNORADO_CONFIG",
+                status="error",
+                detail="Cliente sem group_id para envio",
+                client_name=route["client_name"],
+                page_id=page_id,
+                payload={"lead_index": idx},
+            )
             continue
 
         try:
             message = _format_lead_message(body, route["template"], route["client_name"])
+            _emit_runtime_event(
+                stage="MENSAGEM_FORMATADA",
+                status="ok",
+                detail="Mensagem de lead formatada",
+                client_name=route["client_name"],
+                page_id=page_id,
+                group_id=group_id,
+                payload={"lead_index": idx, "message_len": len(message)},
+            )
             if dry:
                 _wh_log(
                     f"LEAD_{idx} | DRY_RUN | cliente={route['client_name']} | page_id={page_id} | preview_len={len(message)}"
                 )
                 sent += 1
+                _emit_runtime_event(
+                    stage="DRY_RUN",
+                    status="info",
+                    detail="Envio simulado (DRY_RUN)",
+                    client_name=route["client_name"],
+                    page_id=page_id,
+                    group_id=group_id,
+                    payload={"lead_index": idx},
+                )
                 continue
 
             client = get_evolution_client()
@@ -666,11 +775,29 @@ def _handle_meta_new_lead(endpoint_label: str, allow_legacy_lorena_fallback: boo
                     f"LEAD_{idx} | WHATSAPP_ENVIADO_OK | cliente={route['client_name']} | page_id={page_id}"
                 )
                 sent += 1
+                _emit_runtime_event(
+                    stage="WHATSAPP_ENVIADO_OK",
+                    status="ok",
+                    detail="Mensagem enviada ao grupo",
+                    client_name=route["client_name"],
+                    page_id=page_id,
+                    group_id=group_id,
+                    payload={"lead_index": idx},
+                )
             else:
                 errors.append(f"lead_index_{idx}: send returned false")
                 _wh_log(
                     f"LEAD_{idx} | WHATSAPP_FALHA | cliente={route['client_name']}",
                     level=logging.ERROR,
+                )
+                _emit_runtime_event(
+                    stage="WHATSAPP_FALHA",
+                    status="error",
+                    detail="Evolution retornou falha ao enviar para grupo",
+                    client_name=route["client_name"],
+                    page_id=page_id,
+                    group_id=group_id,
+                    payload={"lead_index": idx},
                 )
                 continue
 
@@ -686,19 +813,48 @@ def _handle_meta_new_lead(endpoint_label: str, allow_legacy_lorena_fallback: boo
                         f"LEAD_{idx} | WHATSAPP_TELEFONE_FALHA | cliente={route['client_name']} | numero={extra_phone}",
                         level=logging.ERROR,
                     )
+                    _emit_runtime_event(
+                        stage="WHATSAPP_TELEFONE_FALHA",
+                        status="error",
+                        detail="Falha no envio extra para telefone direto",
+                        client_name=route["client_name"],
+                        page_id=page_id,
+                        payload={"lead_index": idx, "numero": extra_phone},
+                    )
         except Exception as e:
             errors.append(f"lead_index_{idx}: {e!s}")
             _wh_log(f"LEAD_{idx} | WHATSAPP_EXCECAO | {e!s}", level=logging.ERROR)
             logger.exception("Falha ao enviar lead %s", idx)
+            _emit_runtime_event(
+                stage="WHATSAPP_EXCECAO",
+                status="error",
+                detail=f"Exceção no envio: {e!s}",
+                client_name=route.get("client_name", ""),
+                page_id=page_id,
+                group_id=group_id,
+                payload={"lead_index": idx},
+            )
 
     if errors:
         _wh_log(
             f"POST {endpoint_label} | RESPOSTA_500 | sent={sent} | erros={len(errors)}",
             level=logging.ERROR,
         )
+        _emit_runtime_event(
+            stage="CONCLUIDO_FALHA",
+            status="error",
+            detail=f"Webhook finalizado com erros ({len(errors)})",
+            payload={"endpoint": endpoint_label, "sent": sent, "errors": errors, "skipped": skipped},
+        )
         return jsonify({"ok": False, "sent": sent, "skipped": skipped, "errors": errors}), 500
 
     _wh_log(f"POST {endpoint_label} | CONCLUIDO_OK | sent={sent} | skipped={len(skipped)}")
+    _emit_runtime_event(
+        stage="CONCLUIDO_OK",
+        status="ok",
+        detail="Webhook finalizado sem erros",
+        payload={"endpoint": endpoint_label, "sent": sent, "skipped": skipped},
+    )
     return jsonify({"ok": True, "sent": sent, "skipped": skipped}), 200
 
 

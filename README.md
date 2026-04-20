@@ -182,6 +182,33 @@ curl -sS -X POST "http://127.0.0.1:8080/meta-new-lead" \
 ### 4. Modo DRY_RUN
 Para testar sem enviar WhatsApp, configure `DRY_RUN=true` no `.env`. Os relatórios serão salvos em `.tmp/report_<ad_account_id>.md`.
 
+### Dashboard viva de clientes + harness
+
+Para visualizar clientes ativos, validar campos do `clients.json`, adicionar novos clientes e acompanhar eventos de webhook em tempo real:
+
+```bash
+python execution/dashboard_app.py
+```
+
+Depois abra no navegador:
+
+- `http://127.0.0.1:8091/` (ou `DASHBOARD_PORT` configurada)
+
+**O que a dashboard entrega:**
+- Lista de clientes e status (`Ativo completo`, `Ativo parcial`, `Pausado`, `Inconsistente`)
+- Validação visual de `ad_account_id`, `group_id`, `meta_page_id`, `lead_group_id`
+- Formulário para adicionar cliente (grava em `clients.json`)
+- Coluna de fluxo por cliente com eventos do webhook em tempo real (SSE)
+- Botões de harness por cliente para simular cenários do webhook
+
+**Harness via CLI (opcional):**
+
+```bash
+python execution/dashboard_harness.py --client-id 0 --scenario success
+python execution/dashboard_harness.py --client-id 0 --scenario send_fail
+python execution/dashboard_harness.py --client-id 0 --scenario route_fail
+```
+
 ### 5. Execução Manual
 ```bash
 # Execução pelo cron (só envia às segundas, timezone DEFAULT_REPORT_TIMEZONE)
