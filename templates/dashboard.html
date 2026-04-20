@@ -31,57 +31,172 @@
         </div>
       </header>
 
-      <section class="panel panel-form">
-        <div class="panel-title-wrap">
-          <h2>Novo cliente</h2>
-          <p>Cadastro direto em <code>clients.json</code>.</p>
-        </div>
-        <form id="newClientForm" class="new-client-grid">
-          <label>
-            Nome do cliente
-            <input name="client_name" required placeholder="Ex.: Lorena Carvalho" />
-          </label>
-          <label>
-            Conta Meta
-            <input name="ad_account_id" required placeholder="act_123456789" />
-          </label>
-          <label>
-            Grupo relatório
-            <input name="group_id" required placeholder="1203...@g.us" />
-          </label>
-          <label>
-            Meta page id
-            <input name="meta_page_id" placeholder="102086421781424" />
-          </label>
-          <label>
-            Grupo leads
-            <input name="lead_group_id" placeholder="1203...@g.us" />
-          </label>
-          <label>
-            Template lead
-            <select name="lead_template">
-              <option value="default">default</option>
-              <option value="lorena">lorena</option>
-              <option value="pratical_life">pratical_life</option>
-            </select>
-          </label>
-          <label class="check">
-            <input type="checkbox" name="enabled" checked />
-            <span>Automação ativa</span>
-          </label>
-          <button type="submit" class="primary">Adicionar cliente</button>
-        </form>
-        <p id="formFeedback" class="feedback"></p>
+      <nav class="tabs-nav panel">
+        <button class="tab-btn is-active" data-tab="meta">Clientes Meta</button>
+        <button class="tab-btn" data-tab="google">Clientes Google Ads</button>
+        <button class="tab-btn" data-tab="templates">Templates de Mensagem</button>
+      </nav>
+
+      <section id="tab-meta" class="tab-panel is-active">
+        <section class="panel panel-form">
+          <div class="panel-title-wrap">
+            <h2>Novo cliente Meta</h2>
+            <p>Cadastro direto em <code>clients.json</code>.</p>
+          </div>
+          <form id="newClientForm" class="new-client-grid">
+            <label>
+              Nome do cliente
+              <input name="client_name" required placeholder="Ex.: Lorena Carvalho" />
+            </label>
+            <label>
+              Conta Meta
+              <input name="ad_account_id" required placeholder="act_123456789" />
+            </label>
+            <label>
+              Grupo relatório
+              <input name="group_id" required placeholder="1203...@g.us" />
+            </label>
+            <label>
+              Meta page id
+              <input name="meta_page_id" placeholder="102086421781424" />
+            </label>
+            <label>
+              Grupo leads
+              <input name="lead_group_id" placeholder="1203...@g.us" />
+            </label>
+            <label>
+              Template lead
+              <input name="lead_template" placeholder="default / lorena / personalizado" value="default" />
+            </label>
+            <label class="check">
+              <input type="checkbox" name="enabled" checked />
+              <span>Automação ativa</span>
+            </label>
+            <button type="submit" class="primary">Adicionar cliente Meta</button>
+          </form>
+          <p id="formFeedback" class="feedback"></p>
+        </section>
+
+        <section class="stats" id="statsRow"></section>
+
+        <section>
+          <div class="panel-title-wrap list-header">
+            <h2>Clientes Meta monitorados</h2>
+            <button id="refreshBtn" class="ghost">Atualizar</button>
+          </div>
+          <div id="clientsGrid" class="clients-grid"></div>
+        </section>
       </section>
 
-      <section class="stats" id="statsRow"></section>
+      <section id="tab-google" class="tab-panel">
+        <section class="panel panel-form">
+          <div class="panel-title-wrap">
+            <h2>Novo cliente Google Ads</h2>
+            <p>Cadastro direto em <code>google_clients.json</code>.</p>
+          </div>
+          <form id="newGoogleClientForm" class="new-client-grid">
+            <label>
+              Nome do cliente
+              <input name="client_name" required placeholder="Ex.: Practical Life Jardim Prudencia" />
+            </label>
+            <label>
+              Google customer id
+              <input name="google_customer_id" required placeholder="253-906-3374" />
+            </label>
+            <label>
+              Grupo WhatsApp
+              <input name="group_id" required placeholder="1203...@g.us" />
+            </label>
+            <label>
+              Template Google
+              <input name="google_template" value="default" placeholder="default / personalizado" />
+            </label>
+            <label>
+              Conversões primárias (CSV)
+              <input name="primary_conversions" placeholder="Formulário, WhatsApp, Ligação" />
+            </label>
+            <label>
+              Observações
+              <input name="notes" placeholder="Opcional" />
+            </label>
+            <label class="check">
+              <input type="checkbox" name="enabled" checked />
+              <span>Automação ativa</span>
+            </label>
+            <button type="submit" class="primary">Adicionar cliente Google</button>
+          </form>
+          <p id="googleFormFeedback" class="feedback"></p>
+        </section>
+        <section class="stats" id="googleStatsRow"></section>
+        <section>
+          <div class="panel-title-wrap list-header">
+            <h2>Clientes Google Ads</h2>
+            <button id="refreshGoogleBtn" class="ghost">Atualizar</button>
+          </div>
+          <div id="googleClientsGrid" class="clients-grid"></div>
+        </section>
+      </section>
 
-      <section>
-        <div class="panel-title-wrap list-header">
-          <h2>Clientes monitorados</h2>
-          <button id="refreshBtn" class="ghost">Atualizar</button>
-        </div>
-        <div id="clientsGrid" class="clients-grid"></div>
+      <section id="tab-templates" class="tab-panel">
+        <section class="panel panel-form">
+          <div class="panel-title-wrap">
+            <h2>Templates de Mensagem</h2>
+            <p>Crie formatos com variáveis para Meta e Google.</p>
+          </div>
+          <form id="templateForm" class="template-grid">
+            <label>
+              Canal
+              <select name="channel" id="tplChannel">
+                <option value="meta_lead">meta_lead</option>
+                <option value="google_report">google_report</option>
+              </select>
+            </label>
+            <label>
+              Template ID
+              <input name="template_id" required placeholder="ex.: comercial_padrao" />
+            </label>
+            <label>
+              Nome do template
+              <input name="name" required placeholder="Ex.: Lead Comercial Padrão" />
+            </label>
+            <label>
+              Descrição
+              <input name="description" placeholder="Uso interno opcional" />
+            </label>
+            <label class="template-textarea">
+              Conteúdo da mensagem
+              <textarea
+                name="content"
+                rows="12"
+                required
+                placeholder="Use variáveis no formato {{variavel}}"
+              ></textarea>
+            </label>
+            <div class="template-side">
+              <div class="vars-box">
+                <h4>Variáveis disponíveis</h4>
+                <div id="tplVars" class="vars-list"></div>
+              </div>
+              <div class="vars-box">
+                <h4>Preview</h4>
+                <button id="previewBtn" type="button" class="small ghost">Gerar preview</button>
+                <pre id="tplPreview" class="preview-box"></pre>
+              </div>
+            </div>
+            <div class="template-actions">
+              <button type="submit" class="primary">Salvar template</button>
+            </div>
+          </form>
+          <p id="templateFeedback" class="feedback"></p>
+        </section>
+
+        <section class="panel">
+          <div class="panel-title-wrap">
+            <h2>Templates cadastrados</h2>
+            <button id="refreshTemplatesBtn" class="ghost">Atualizar</button>
+          </div>
+          <div id="templatesCatalog" class="templates-catalog"></div>
+        </section>
       </section>
     </main>
 
@@ -102,15 +217,111 @@
           </dl>
           <div class="checks"></div>
           <div class="actions">
+            <button class="small action-edit" data-action="toggle-edit">Editar cliente</button>
             <button data-scenario="success" class="small action-ok">Harness sucesso</button>
             <button data-scenario="send_fail" class="small action-warn">Harness falha envio</button>
             <button data-scenario="route_fail" class="small action-err">Harness falha rota</button>
           </div>
+          <form class="edit-form hidden">
+            <label>
+              Nome
+              <input name="client_name" required />
+            </label>
+            <label>
+              Conta Meta
+              <input name="ad_account_id" required />
+            </label>
+            <label>
+              Grupo relatório
+              <input name="group_id" required />
+            </label>
+            <label>
+              Meta page id
+              <input name="meta_page_id" />
+            </label>
+            <label>
+              Grupo lead
+              <input name="lead_group_id" />
+            </label>
+            <label>
+              Telefone lead
+              <input name="lead_phone_number" />
+            </label>
+            <label>
+              Template lead
+              <input name="lead_template" />
+            </label>
+            <label class="check">
+              <input type="checkbox" name="enabled" />
+              <span>Automação ativa</span>
+            </label>
+            <div class="edit-actions">
+              <button type="submit" class="small action-ok">Salvar</button>
+              <button type="button" class="small ghost" data-action="cancel-edit">Cancelar</button>
+            </div>
+            <p class="edit-feedback"></p>
+          </form>
         </div>
         <aside class="flow-rail">
           <h4>Fluxo em tempo real</h4>
           <ul class="event-list"></ul>
         </aside>
+      </article>
+    </template>
+
+    <template id="googleClientCardTemplate">
+      <article class="client-card google-card">
+        <div class="client-main">
+          <div class="client-head">
+            <h3 class="client-name"></h3>
+            <span class="status-pill"></span>
+          </div>
+          <dl class="meta-grid">
+            <div><dt>Customer ID</dt><dd class="g-google_customer_id"></dd></div>
+            <div><dt>Grupo</dt><dd class="g-group_id"></dd></div>
+            <div><dt>Template</dt><dd class="g-google_template"></dd></div>
+            <div><dt>Enabled</dt><dd class="g-enabled"></dd></div>
+            <div><dt>Conversões</dt><dd class="g-primary_conversions"></dd></div>
+            <div><dt>Notas</dt><dd class="g-notes"></dd></div>
+          </dl>
+          <div class="checks"></div>
+          <button class="small action-edit" data-action="toggle-edit-google">Editar cliente Google</button>
+          <form class="edit-form hidden">
+            <label>
+              Nome
+              <input name="client_name" required />
+            </label>
+            <label>
+              Customer ID
+              <input name="google_customer_id" required />
+            </label>
+            <label>
+              Grupo
+              <input name="group_id" required />
+            </label>
+            <label>
+              Template Google
+              <input name="google_template" />
+            </label>
+            <label>
+              Conversões (CSV)
+              <input name="primary_conversions" />
+            </label>
+            <label>
+              Notas
+              <input name="notes" />
+            </label>
+            <label class="check">
+              <input type="checkbox" name="enabled" />
+              <span>Automação ativa</span>
+            </label>
+            <div class="edit-actions">
+              <button type="submit" class="small action-ok">Salvar</button>
+              <button type="button" class="small ghost" data-action="cancel-edit-google">Cancelar</button>
+            </div>
+            <p class="edit-feedback"></p>
+          </form>
+        </div>
       </article>
     </template>
 

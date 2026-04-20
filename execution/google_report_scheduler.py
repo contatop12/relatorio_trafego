@@ -23,6 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from execution.data_processor import format_currency, format_number
 from execution.evolution_client import get_evolution_client
+from execution.message_templates import get_template_content, render_template_text
 
 log_dir = os.path.join(os.path.dirname(__file__), "..", ".tmp")
 os.makedirs(log_dir, exist_ok=True)
@@ -448,6 +449,7 @@ def _build_google_report_message(
     period_start: str,
     period_end: str,
     metrics: Dict[str, Any],
+    template_id: str = "default",
 ) -> str:
     conversion_lines = []
     for conv_name, conv_value in metrics.get("primary_conversions", {}).items():
@@ -486,6 +488,19 @@ def _build_google_report_message(
     if hidden_campaigns > 0:
         campaigns_block += f"\n\n... e mais {hidden_campaigns} campanha(s) ativa(s)."
 
+    custom_content = get_template_content("google_report", template_id)
+    if custom_content:
+        return render_template_text(
+            custom_content,
+            {
+                "client_name": client_name,
+                "customer_id": _normalize_customer_id(customer_id),
+                "period_start_br": _date_iso_to_br(period_start),
+                "period_end_br": _date_iso_to_br(period_end),
+                "conversions_block": conversions_block,
+                "campaigns_block": campaigns_block,
+            },
+        )
     return (
         f"*{client_name}*\n\n"
         f"📊 *Relatorio Google Ads*\n"
@@ -523,6 +538,7 @@ def run_google_reports(*, force_send_zero: bool = False, only_customer_id: Optio
         client_name = str(client.get("client_name", "Cliente Google")).strip()
         customer_id = str(client.get("google_customer_id", "")).strip()
         group_id = str(client.get("group_id", "")).strip()
+        google_template = str(client.get("google_template", "default")).strip() or "default"
         primary_conversions = client.get("primary_conversions") or []
         if not isinstance(primary_conversions, list):
             primary_conversions = []
@@ -559,7 +575,9 @@ def run_google_reports(*, force_send_zero: bool = False, only_customer_id: Optio
             logger.info("Cliente %s sem atividade nas campanhas ativas. Pulando envio.", client_name)
             continue
 
-        message = _build_google_report_message(client_name, customer_id, period_start, period_end, metrics)
+        message = _build_google_report_message(
+            client_name, customer_id, period_start, period_end, metrics, template_id=google_template
+        )
 
         if dry_run:
             file_name = "".join(ch for ch in customer_id if ch.isdigit()) or "google"

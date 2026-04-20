@@ -25,6 +25,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from execution.evolution_client import get_evolution_client
 from execution import dashboard_app as dashboard_module
 from execution.live_events import publish_event
+from execution.message_templates import get_template_content, render_template_text
 
 log_dir = os.path.join(os.path.dirname(__file__), "..", ".tmp")
 os.makedirs(log_dir, exist_ok=True)
@@ -584,6 +585,21 @@ TEMPLATE_FORMATTERS: Dict[str, Callable[[Dict[str, Any], str], str]] = {
 
 
 def _format_lead_message(body: Dict[str, Any], template_id: str, client_name: str) -> str:
+    custom_content = get_template_content("meta_lead", template_id)
+    if custom_content:
+        base = _base_message_fields(body)
+        rendered = render_template_text(
+            custom_content,
+            {
+                "client_name": client_name,
+                "nome": base["nome"],
+                "email": base["email"],
+                "whatsapp": base["whatsapp"],
+                "form_name": base["form_name"],
+                "respostas": base["respostas"],
+            },
+        )
+        return _truncate_message(rendered)
     formatter = TEMPLATE_FORMATTERS.get(template_id, TEMPLATE_FORMATTERS["default"])
     return formatter(body, client_name)
 
@@ -897,6 +913,36 @@ def dash_api_add_client():
 @app.put("/dash/api/clients/<int:client_id>")
 def dash_api_update_client(client_id: int):
     return dashboard_module.api_update_client(client_id)
+
+
+@app.get("/dash/api/google-clients")
+def dash_api_google_clients():
+    return dashboard_module.api_google_clients()
+
+
+@app.post("/dash/api/google-clients")
+def dash_api_add_google_client():
+    return dashboard_module.api_add_google_client()
+
+
+@app.put("/dash/api/google-clients/<int:client_id>")
+def dash_api_update_google_client(client_id: int):
+    return dashboard_module.api_update_google_client(client_id)
+
+
+@app.get("/dash/api/message-templates")
+def dash_api_message_templates():
+    return dashboard_module.api_message_templates()
+
+
+@app.put("/dash/api/message-templates/<channel>/<template_id>")
+def dash_api_upsert_message_template(channel: str, template_id: str):
+    return dashboard_module.api_upsert_message_template(channel, template_id)
+
+
+@app.post("/dash/api/message-templates/preview")
+def dash_api_message_template_preview():
+    return dashboard_module.api_message_template_preview()
 
 
 @app.post("/dash/api/harness/simulate-webhook")

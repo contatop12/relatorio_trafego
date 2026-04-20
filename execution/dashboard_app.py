@@ -26,6 +26,11 @@ from execution.live_events import (
     read_events_since,
     read_recent_events,
 )
+from execution.message_templates import (
+    list_templates_payload,
+    render_template_text,
+    upsert_template,
+)
 
 app = Flask(
     __name__,
@@ -34,10 +39,15 @@ app = Flask(
 )
 
 _CLIENTS_LOCK = threading.Lock()
+_GOOGLE_CLIENTS_LOCK = threading.Lock()
 
 
 def _clients_path() -> str:
     return os.path.join(os.path.dirname(__file__), "..", "clients.json")
+
+
+def _google_clients_path() -> str:
+    return os.path.join(os.path.dirname(__file__), "..", "google_clients.json")
 
 
 def _load_clients() -> List[Dict[str, Any]]:
@@ -55,6 +65,26 @@ def _load_clients() -> List[Dict[str, Any]]:
 def _save_clients(clients: List[Dict[str, Any]]) -> None:
     path = _clients_path()
     with _CLIENTS_LOCK:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(clients, f, ensure_ascii=False, indent=2)
+            f.write("\n")
+
+
+def _load_google_clients() -> List[Dict[str, Any]]:
+    path = _google_clients_path()
+    if not os.path.exists(path):
+        return []
+    with _GOOGLE_CLIENTS_LOCK:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    if isinstance(data, list):
+        return [c for c in data if isinstance(c, dict)]
+    return []
+
+
+def _save_google_clients(clients: List[Dict[str, Any]]) -> None:
+    path = _google_clients_path()
+    with _GOOGLE_CLIENTS_LOCK:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(clients, f, ensure_ascii=False, indent=2)
             f.write("\n")
@@ -118,6 +148,52 @@ def _validate_client(client: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _normalize_google_customer_id(raw: str) -> str:
+    digits = "".join(ch for ch in str(raw or "") if ch.isdigit())
+    if len(digits) == 10:
+        return f"{digits[:3]}-{digits[3:6]}-{digits[6:]}"
+    return str(raw or "").strip()
+
+
+def _validate_google_client(client: Dict[str, Any]) -> Dict[str, Any]:
+    customer_id = str(client.get("google_customer_id", "")).strip()
+    group_id = str(client.get("group_id", "")).strip()
+    enabled = bool(client.get("enabled", True))
+    cid_ok = bool(re.fullmatch(r"\d{3}-\d{3}-\d{4}", customer_id))
+    group_ok = bool(re.fullmatch(r"\d+@g\.us", group_id))
+    if not enabled:
+        status = "Pausado"
+    elif cid_ok and group_ok:
+        status = "Ativo completo"
+    elif cid_ok:
+        status = "Ativo parcial"
+    else:
+        status = "Inconsistente"
+    return {
+        "customer_id_ok": cid_ok,
+        "group_id_ok": group_ok,
+        "status_label": status,
+    }
+
+
+def _public_google_client_payload(index: int, raw: Dict[str, Any]) -> Dict[str, Any]:
+    primary = raw.get("primary_conversions")
+    if not isinstance(primary, list):
+        primary = []
+    client = {
+        "id": index,
+        "client_name": str(raw.get("client_name", "")).strip(),
+        "google_customer_id": _normalize_google_customer_id(str(raw.get("google_customer_id", "")).strip()),
+        "group_id": str(raw.get("group_id", "")).strip(),
+        "enabled": bool(raw.get("enabled", True)),
+        "notes": str(raw.get("notes", "")).strip(),
+        "google_template": str(raw.get("google_template", "default")).strip() or "default",
+        "primary_conversions": [str(x).strip() for x in primary if str(x).strip()],
+    }
+    client["checks"] = _validate_google_client(client)
+    return client
+
+
 def _latest_events_by_client(limit: int = 300, per_client: int = 25) -> Dict[str, List[Dict[str, Any]]]:
     events = read_recent_events(limit=limit)
     grouped: Dict[str, List[Dict[str, Any]]] = {}
@@ -158,6 +234,15 @@ def _build_clients_response() -> Dict[str, Any]:
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "clients": payload,
         "global_events": events_map.get("__global__", []),
+    }
+
+
+def _build_google_clients_response() -> Dict[str, Any]:
+    clients = _load_google_clients()
+    payload = [_public_google_client_payload(i, c) for i, c in enumerate(clients)]
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "clients": payload,
     }
 
 
@@ -301,6 +386,142 @@ def api_update_client(client_id: int) -> Any:
         group_id=str(current.get("group_id", "")).strip(),
     )
     return jsonify({"ok": True, "client": _public_client_payload(client_id, current, _latest_events_by_client())})
+
+
+@app.get("/api/google-clients")
+def api_google_clients() -> Any:
+    return jsonify(_build_google_clients_response())
+
+
+@app.post("/api/google-clients")
+def api_add_google_client() -> Any:
+    payload = request.get_json(silent=True) or {}
+    client_name = str(payload.get("client_name", "")).strip()
+    google_customer_id = _normalize_google_customer_id(str(payload.get("google_customer_id", "")).strip())
+    group_id = str(payload.get("group_id", "")).strip()
+    notes = str(payload.get("notes", "")).strip()
+    google_template = str(payload.get("google_template", "default")).strip() or "default"
+    enabled = _as_bool(payload.get("enabled"), default=True)
+    primary = payload.get("primary_conversions")
+    if isinstance(primary, str):
+        primary_conversions = [x.strip() for x in primary.split(",") if x.strip()]
+    elif isinstance(primary, list):
+        primary_conversions = [str(x).strip() for x in primary if str(x).strip()]
+    else:
+        primary_conversions = []
+
+    if not client_name:
+        return jsonify({"ok": False, "error": "client_name_obrigatorio"}), 400
+    if not google_customer_id:
+        return jsonify({"ok": False, "error": "google_customer_id_obrigatorio"}), 400
+    if not group_id:
+        return jsonify({"ok": False, "error": "group_id_obrigatorio"}), 400
+
+    clients = _load_google_clients()
+    new_client = {
+        "id": re.sub(r"[^a-z0-9_]+", "_", client_name.lower()).strip("_") or f"google_{len(clients)+1}",
+        "client_name": client_name,
+        "google_customer_id": google_customer_id,
+        "group_id": group_id,
+        "enabled": enabled,
+        "primary_conversions": primary_conversions,
+        "notes": notes,
+        "google_template": google_template,
+    }
+    clients.append(new_client)
+    _save_google_clients(clients)
+    publish_event(
+        source="dashboard_app",
+        stage="GOOGLE_CLIENTE_ADICIONADO",
+        status="ok",
+        detail="Novo cliente Google Ads adicionado via dashboard",
+        client_name=client_name,
+        group_id=group_id,
+    )
+    return jsonify({"ok": True, "client": _public_google_client_payload(len(clients) - 1, new_client)})
+
+
+@app.put("/api/google-clients/<int:client_id>")
+def api_update_google_client(client_id: int) -> Any:
+    payload = request.get_json(silent=True) or {}
+    clients = _load_google_clients()
+    if client_id < 0 or client_id >= len(clients):
+        return jsonify({"ok": False, "error": "cliente_nao_encontrado"}), 404
+    current = clients[client_id]
+    updatable = {
+        "client_name",
+        "google_customer_id",
+        "group_id",
+        "enabled",
+        "notes",
+        "google_template",
+        "primary_conversions",
+    }
+    for key in updatable:
+        if key not in payload:
+            continue
+        if key == "enabled":
+            current[key] = _as_bool(payload[key], default=True)
+        elif key == "google_customer_id":
+            current[key] = _normalize_google_customer_id(str(payload[key]))
+        elif key == "primary_conversions":
+            val = payload[key]
+            if isinstance(val, str):
+                current[key] = [x.strip() for x in val.split(",") if x.strip()]
+            elif isinstance(val, list):
+                current[key] = [str(x).strip() for x in val if str(x).strip()]
+            else:
+                current[key] = []
+        else:
+            current[key] = str(payload[key]).strip()
+    clients[client_id] = current
+    _save_google_clients(clients)
+    publish_event(
+        source="dashboard_app",
+        stage="GOOGLE_CLIENTE_ATUALIZADO",
+        status="info",
+        detail="Cliente Google Ads atualizado via dashboard",
+        client_name=str(current.get("client_name", "")).strip(),
+        group_id=str(current.get("group_id", "")).strip(),
+    )
+    return jsonify({"ok": True, "client": _public_google_client_payload(client_id, current)})
+
+
+@app.get("/api/message-templates")
+def api_message_templates() -> Any:
+    return jsonify({"ok": True, **list_templates_payload()})
+
+
+@app.put("/api/message-templates/<channel>/<template_id>")
+def api_upsert_message_template(channel: str, template_id: str) -> Any:
+    payload = request.get_json(silent=True) or {}
+    name = str(payload.get("name", template_id)).strip()
+    description = str(payload.get("description", "")).strip()
+    content = str(payload.get("content", "")).rstrip()
+    try:
+        data = upsert_template(channel, template_id, name=name, description=description, content=content)
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+    publish_event(
+        source="dashboard_app",
+        stage="TEMPLATE_SALVO",
+        status="ok",
+        detail=f"Template {channel}/{template_id} salvo",
+        payload={"channel": channel, "template_id": template_id},
+    )
+    return jsonify({"ok": True, "template": data})
+
+
+@app.post("/api/message-templates/preview")
+def api_message_template_preview() -> Any:
+    payload = request.get_json(silent=True) or {}
+    content = str(payload.get("content", "")).rstrip()
+    context = payload.get("context") or {}
+    if not isinstance(context, dict):
+        context = {}
+    rendered = render_template_text(content, context)
+    return jsonify({"ok": True, "preview": rendered})
 
 
 @app.post("/api/harness/simulate-webhook")
