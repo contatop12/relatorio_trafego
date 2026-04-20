@@ -1,7 +1,7 @@
 const state = {
   metaClients: [],
   googleClients: [],
-  templates: { channels: {}, variables: {} },
+  templates: { channels: {}, variables: {}, filters: {} },
   eventsByClient: new Map(),
   eventStream: null,
 };
@@ -124,6 +124,9 @@ function renderMetaClients() {
     editForm.elements.lead_group_id.value = client.lead_group_id || "";
     editForm.elements.lead_phone_number.value = client.lead_phone_number || "";
     editForm.elements.lead_template.value = client.lead_template || "default";
+    editForm.elements.lead_exclude_fields.value = (client.lead_exclude_fields || []).join(", ");
+    editForm.elements.lead_exclude_contains.value = (client.lead_exclude_contains || []).join(", ");
+    editForm.elements.lead_exclude_regex.value = (client.lead_exclude_regex || []).join(", ");
     editForm.elements.enabled.checked = !!client.enabled;
 
     card.querySelector('[data-action="toggle-edit"]').addEventListener("click", () => {
@@ -281,6 +284,15 @@ function renderTemplatesCatalog() {
   });
 }
 
+function renderFiltersForm() {
+  const form = document.getElementById("filtersForm");
+  if (!form) return;
+  const rules = state.templates.filters?.meta_lead || {};
+  form.elements.exclude_exact.value = (rules.exclude_exact || []).join(", ");
+  form.elements.exclude_contains.value = (rules.exclude_contains || []).join(", ");
+  form.elements.exclude_regex.value = (rules.exclude_regex || []).join(", ");
+}
+
 async function fetchMetaClients() {
   const r = await fetch(apiUrl("/api/clients"));
   if (!r.ok) throw new Error("Falha ao carregar clientes Meta");
@@ -308,6 +320,7 @@ async function fetchTemplates() {
   state.templates = data;
   renderTemplateVariables(document.getElementById("tplChannel").value);
   renderTemplatesCatalog();
+  renderFiltersForm();
 }
 
 async function submitNewMetaClient(ev) {
@@ -381,16 +394,46 @@ async function saveTemplate(ev) {
   await fetchTemplates();
 }
 
+async function saveFilters(ev) {
+  ev.preventDefault();
+  const form = ev.currentTarget;
+  const feedback = document.getElementById("filtersFeedback");
+  feedback.textContent = "Salvando filtros...";
+  const payload = Object.fromEntries(new FormData(form).entries());
+  const r = await fetch(apiUrl("/api/message-filters/meta_lead"), {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const body = await r.json();
+  if (!r.ok || !body.ok) {
+    feedback.textContent = `Erro: ${body.error || "falha ao salvar filtros"}`;
+    return;
+  }
+  feedback.textContent = "Filtros globais salvos com sucesso.";
+  await fetchTemplates();
+}
+
 async function generateTemplatePreview() {
   const form = document.getElementById("templateForm");
   const payload = Object.fromEntries(new FormData(form).entries());
   const sampleContext = {
     client_name: "Cliente Exemplo",
+    page_id: "102086421781424",
+    template_id: "default",
     nome: "Maria da Silva",
     email: "maria@email.com",
     whatsapp: "https://wa.me/5511999999999",
+    telefone_digitos: "5511999999999",
     form_name: "Formulário Principal",
     respostas: "*interesse:* Plano Premium\n*cidade:* São Paulo",
+    respostas_filtradas: "*interesse:* Plano Premium\n*cidade:* São Paulo",
+    respostas_raw: "*utm_source:* {{site_source_name}}\n*referencia:* AP29\n*interesse:* Plano Premium\n*cidade:* São Paulo",
+    respostas_omitidas: "utm_source, referencia",
+    respostas_count: "2",
+    respostas_raw_count: "4",
+    respostas_omitidas_count: "2",
+    received_at: "20/04/2026 11:42:00",
     customer_id: "253-906-3374",
     period_start_br: "01/04/2026",
     period_end_br: "07/04/2026",
@@ -470,6 +513,7 @@ function bindUI() {
   document.getElementById("newClientForm").addEventListener("submit", submitNewMetaClient);
   document.getElementById("newGoogleClientForm").addEventListener("submit", submitNewGoogleClient);
   document.getElementById("templateForm").addEventListener("submit", saveTemplate);
+  document.getElementById("filtersForm").addEventListener("submit", saveFilters);
   document.getElementById("refreshBtn").addEventListener("click", fetchMetaClients);
   document.getElementById("refreshGoogleBtn").addEventListener("click", fetchGoogleClients);
   document.getElementById("refreshTemplatesBtn").addEventListener("click", fetchTemplates);

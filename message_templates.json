@@ -1,1 +1,13 @@
-{}
+{
+  "filters": {
+    "meta_lead": {
+      "exclude_exact": [
+        "referencia"
+      ],
+      "exclude_contains": [
+        "utm_"
+      ],
+      "exclude_regex": []
+    }
+  }
+}

@@ -29,6 +29,7 @@ from execution.live_events import (
 from execution.message_templates import (
     list_templates_payload,
     render_template_text,
+    upsert_filter_rules,
     upsert_template,
 )
 
@@ -112,6 +113,14 @@ def _as_bool(v: Any, default: bool = True) -> bool:
     if s in {"0", "false", "no", "n", "off"}:
         return False
     return default
+
+
+def _csv_list(value: Any) -> List[str]:
+    if isinstance(value, list):
+        return [str(v).strip() for v in value if str(v).strip()]
+    if isinstance(value, str):
+        return [part.strip() for part in value.split(",") if part.strip()]
+    return []
 
 
 def _validate_client(client: Dict[str, Any]) -> Dict[str, Any]:
@@ -214,6 +223,9 @@ def _public_client_payload(index: int, raw: Dict[str, Any], events_map: Dict[str
         "lead_group_id": str(raw.get("lead_group_id", "")).strip(),
         "lead_phone_number": str(raw.get("lead_phone_number", "")).strip(),
         "lead_template": str(raw.get("lead_template", "")).strip() or "default",
+        "lead_exclude_fields": _csv_list(raw.get("lead_exclude_fields")),
+        "lead_exclude_contains": _csv_list(raw.get("lead_exclude_contains")),
+        "lead_exclude_regex": _csv_list(raw.get("lead_exclude_regex")),
         "enabled": bool(raw.get("enabled", True)),
     }
     checks = _validate_client(client)
@@ -307,6 +319,9 @@ def api_add_client() -> Any:
     lead_group_id = str(payload.get("lead_group_id", "")).strip()
     lead_phone_number = str(payload.get("lead_phone_number", "")).strip()
     lead_template = str(payload.get("lead_template", "default")).strip() or "default"
+    lead_exclude_fields = _csv_list(payload.get("lead_exclude_fields"))
+    lead_exclude_contains = _csv_list(payload.get("lead_exclude_contains"))
+    lead_exclude_regex = _csv_list(payload.get("lead_exclude_regex"))
     enabled = _as_bool(payload.get("enabled"), default=True)
 
     if not client_name:
@@ -325,6 +340,9 @@ def api_add_client() -> Any:
         "lead_group_id": lead_group_id,
         "lead_phone_number": lead_phone_number,
         "lead_template": lead_template,
+        "lead_exclude_fields": lead_exclude_fields,
+        "lead_exclude_contains": lead_exclude_contains,
+        "lead_exclude_regex": lead_exclude_regex,
         "enabled": enabled,
     }
     clients.append(new_client)
@@ -360,6 +378,9 @@ def api_update_client(client_id: int) -> Any:
         "lead_group_id",
         "lead_phone_number",
         "lead_template",
+        "lead_exclude_fields",
+        "lead_exclude_contains",
+        "lead_exclude_regex",
         "enabled",
     }
     for key in updatable_fields:
@@ -369,6 +390,8 @@ def api_update_client(client_id: int) -> Any:
             current[key] = _normalize_act_id(str(payload[key]))
         elif key == "enabled":
             current[key] = _as_bool(payload[key], default=True)
+        elif key in {"lead_exclude_fields", "lead_exclude_contains", "lead_exclude_regex"}:
+            current[key] = _csv_list(payload[key])
         else:
             current[key] = str(payload[key]).strip()
 
@@ -522,6 +545,28 @@ def api_message_template_preview() -> Any:
         context = {}
     rendered = render_template_text(content, context)
     return jsonify({"ok": True, "preview": rendered})
+
+
+@app.put("/api/message-filters/<channel>")
+def api_upsert_message_filters(channel: str) -> Any:
+    payload = request.get_json(silent=True) or {}
+    exclude_exact = _csv_list(payload.get("exclude_exact"))
+    exclude_contains = _csv_list(payload.get("exclude_contains"))
+    exclude_regex = _csv_list(payload.get("exclude_regex"))
+    data = upsert_filter_rules(
+        channel,
+        exclude_exact=exclude_exact,
+        exclude_contains=exclude_contains,
+        exclude_regex=exclude_regex,
+    )
+    publish_event(
+        source="dashboard_app",
+        stage="FILTRO_SALVO",
+        status="ok",
+        detail=f"Filtros de mensagem salvos para {channel}",
+        payload={"channel": channel},
+    )
+    return jsonify({"ok": True, "filters": data})
 
 
 @app.post("/api/harness/simulate-webhook")

@@ -68,6 +68,14 @@
               Template lead
               <input name="lead_template" placeholder="default / lorena / personalizado" value="default" />
             </label>
+            <label>
+              Excluir perguntas (CSV)
+              <input name="lead_exclude_fields" placeholder="utm_source, referencia" />
+            </label>
+            <label>
+              Excluir se contiver (CSV)
+              <input name="lead_exclude_contains" placeholder="utm_, referencia" />
+            </label>
             <label class="check">
               <input type="checkbox" name="enabled" checked />
               <span>Automação ativa</span>
@@ -192,6 +200,29 @@
 
         <section class="panel">
           <div class="panel-title-wrap">
+            <h2>Filtros globais de perguntas (Meta Lead)</h2>
+            <p>Define quais chaves não devem ir no texto final.</p>
+          </div>
+          <form id="filtersForm" class="new-client-grid">
+            <label>
+              Excluir perguntas exatas (CSV)
+              <input name="exclude_exact" placeholder="utm_source, referencia" />
+            </label>
+            <label>
+              Excluir se contiver (CSV)
+              <input name="exclude_contains" placeholder="utm_, referencia" />
+            </label>
+            <label>
+              Excluir por regex (CSV)
+              <input name="exclude_regex" placeholder="^utm_, .*referencia.*" />
+            </label>
+            <button type="submit" class="primary">Salvar filtros globais</button>
+          </form>
+          <p id="filtersFeedback" class="feedback"></p>
+        </section>
+
+        <section class="panel">
+          <div class="panel-title-wrap">
             <h2>Templates cadastrados</h2>
             <button id="refreshTemplatesBtn" class="ghost">Atualizar</button>
           </div>
@@ -260,6 +291,18 @@
             <label>
               Template lead
               <input name="lead_template" />
+            </label>
+            <label>
+              Excluir perguntas (CSV)
+              <input name="lead_exclude_fields" />
+            </label>
+            <label>
+              Excluir se contiver (CSV)
+              <input name="lead_exclude_contains" />
+            </label>
+            <label>
+              Excluir por regex (CSV)
+              <input name="lead_exclude_regex" placeholder="^utm_, .*referencia.*" />
             </label>
             <label class="check">
               <input type="checkbox" name="enabled" />

@@ -1,5 +1,5 @@
 """
-Gerenciamento de templates de mensagem com variáveis.
+Gerenciamento de templates de mensagem, variáveis e filtros de campos.
 """
 
 from __future__ import annotations
@@ -76,11 +76,21 @@ DEFAULT_TEMPLATES: Dict[str, Dict[str, Dict[str, str]]] = {
 TEMPLATE_VARIABLES: Dict[str, Dict[str, str]] = {
     "meta_lead": {
         "client_name": "Nome do cliente",
+        "page_id": "ID da página Meta",
+        "template_id": "ID do template aplicado",
         "nome": "Nome do lead",
         "email": "Email do lead",
         "whatsapp": "Link/contato WhatsApp",
+        "telefone_digitos": "Telefone em formato só dígitos",
         "form_name": "Nome do formulário",
-        "respostas": "Bloco com respostas adicionais",
+        "respostas": "Bloco de respostas filtradas",
+        "respostas_filtradas": "Alias de respostas filtradas",
+        "respostas_raw": "Bloco bruto sem filtros",
+        "respostas_omitidas": "Perguntas removidas pelos filtros",
+        "respostas_count": "Quantidade de respostas enviadas",
+        "respostas_raw_count": "Quantidade de respostas brutas",
+        "respostas_omitidas_count": "Quantidade de respostas removidas",
+        "received_at": "Data/hora de recebimento do webhook",
     },
     "google_report": {
         "client_name": "Nome do cliente",
@@ -90,6 +100,14 @@ TEMPLATE_VARIABLES: Dict[str, Dict[str, str]] = {
         "conversions_block": "Lista formatada de conversões",
         "campaigns_block": "Lista formatada de campanhas",
     },
+}
+
+DEFAULT_FILTER_RULES: Dict[str, Dict[str, Any]] = {
+    "meta_lead": {
+        "exclude_exact": [],
+        "exclude_contains": ["utm_", "referencia"],
+        "exclude_regex": [],
+    }
 }
 
 
@@ -129,9 +147,12 @@ def save_templates(data: Dict[str, Dict[str, Dict[str, str]]]) -> None:
 
 
 def list_templates_payload() -> Dict[str, Any]:
+    templates = load_templates()
+    filters = load_filter_rules()
     return {
-        "channels": load_templates(),
+        "channels": templates,
         "variables": TEMPLATE_VARIABLES,
+        "filters": filters,
     }
 
 
@@ -172,3 +193,75 @@ def get_template_content(channel: str, template_id: str) -> str:
     if isinstance(data, dict):
         return str(data.get("content", "")).strip()
     return ""
+
+
+def load_filter_rules() -> Dict[str, Dict[str, Any]]:
+    path = _templates_path()
+    base = deepcopy(DEFAULT_FILTER_RULES)
+    if not os.path.exists(path):
+        return base
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return base
+    if not isinstance(raw, dict):
+        return base
+    candidate = raw.get("filters")
+    if isinstance(candidate, dict):
+        for channel, channel_rules in candidate.items():
+            if not isinstance(channel_rules, dict):
+                continue
+            merged = base.setdefault(
+                channel,
+                {"exclude_exact": [], "exclude_contains": [], "exclude_regex": []},
+            )
+            for key in ("exclude_exact", "exclude_contains", "exclude_regex"):
+                vals = channel_rules.get(key)
+                if isinstance(vals, list):
+                    merged[key] = [str(v).strip() for v in vals if str(v).strip()]
+    return base
+
+
+def get_filter_rules(channel: str) -> Dict[str, Any]:
+    all_rules = load_filter_rules()
+    channel_rules = all_rules.get(channel, {})
+    if not isinstance(channel_rules, dict):
+        return {"exclude_exact": [], "exclude_contains": [], "exclude_regex": []}
+    return {
+        "exclude_exact": [str(v).strip().lower() for v in channel_rules.get("exclude_exact", []) if str(v).strip()],
+        "exclude_contains": [str(v).strip().lower() for v in channel_rules.get("exclude_contains", []) if str(v).strip()],
+        "exclude_regex": [str(v).strip() for v in channel_rules.get("exclude_regex", []) if str(v).strip()],
+    }
+
+
+def upsert_filter_rules(
+    channel: str,
+    *,
+    exclude_exact: list[str],
+    exclude_contains: list[str],
+    exclude_regex: list[str],
+) -> Dict[str, Any]:
+    path = _templates_path()
+    data: Dict[str, Any] = {}
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                raw = json.load(f)
+            if isinstance(raw, dict):
+                data = raw
+        except (OSError, json.JSONDecodeError):
+            data = {}
+    filters = data.get("filters")
+    if not isinstance(filters, dict):
+        filters = {}
+    filters[channel] = {
+        "exclude_exact": [str(v).strip() for v in exclude_exact if str(v).strip()],
+        "exclude_contains": [str(v).strip() for v in exclude_contains if str(v).strip()],
+        "exclude_regex": [str(v).strip() for v in exclude_regex if str(v).strip()],
+    }
+    data["filters"] = filters
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+        f.write("\n")
+    return filters[channel]

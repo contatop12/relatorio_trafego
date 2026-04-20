@@ -14,6 +14,7 @@ import os
 import re
 import sys
 import requests
+from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from dotenv import load_dotenv
@@ -25,7 +26,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from execution.evolution_client import get_evolution_client
 from execution import dashboard_app as dashboard_module
 from execution.live_events import publish_event
-from execution.message_templates import get_template_content, render_template_text
+from execution.message_templates import get_filter_rules, get_template_content, render_template_text
 
 log_dir = os.path.join(os.path.dirname(__file__), "..", ".tmp")
 os.makedirs(log_dir, exist_ok=True)
@@ -188,6 +189,80 @@ def _build_respostas_text(mappable: List[Dict[str, Any]]) -> str:
         val = _format_field_value(row.get("value"))
         lines.append(f"*{name}:* {val}")
     return "\n".join(lines)
+
+
+def _normalize_field_name(name: str) -> str:
+    return str(name or "").strip().lower()
+
+
+def _is_field_excluded(
+    field_name: str,
+    *,
+    global_rules: Dict[str, Any],
+    client_rules: Dict[str, List[str]],
+) -> bool:
+    normalized = _normalize_field_name(field_name)
+    if not normalized:
+        return True
+    if normalized in _EXCLUDE_RESPOSTAS:
+        return True
+
+    exact = set(global_rules.get("exclude_exact", [])) | set(client_rules.get("exclude_exact", []))
+    if normalized in exact:
+        return True
+
+    contains_rules = list(global_rules.get("exclude_contains", [])) + list(client_rules.get("exclude_contains", []))
+    for token in contains_rules:
+        token = _normalize_field_name(token)
+        if token and token in normalized:
+            return True
+
+    regex_rules = list(global_rules.get("exclude_regex", [])) + list(client_rules.get("exclude_regex", []))
+    for pattern in regex_rules:
+        try:
+            if pattern and re.search(pattern, normalized, re.IGNORECASE):
+                return True
+        except re.error:
+            continue
+    return False
+
+
+def _build_respostas_bundle(
+    mappable: List[Dict[str, Any]],
+    *,
+    global_rules: Dict[str, Any],
+    client_rules: Dict[str, List[str]],
+) -> Dict[str, Any]:
+    filtered_lines: List[str] = []
+    raw_lines: List[str] = []
+    omitted_names: List[str] = []
+
+    for row in mappable:
+        if not isinstance(row, dict):
+            continue
+        name = str(row.get("name", "")).strip()
+        if not name:
+            continue
+        val = _format_field_value(row.get("value"))
+        line = f"*{name}:* {val}"
+        raw_lines.append(line)
+
+        if _is_field_excluded(name, global_rules=global_rules, client_rules=client_rules):
+            omitted_names.append(name)
+            continue
+        filtered_lines.append(line)
+
+    filtered_text = "\n".join(filtered_lines) if filtered_lines else "(nenhuma resposta adicional)"
+    raw_text = "\n".join(raw_lines) if raw_lines else "(nenhuma resposta adicional)"
+    omitted_text = ", ".join(omitted_names) if omitted_names else "(nenhuma)"
+    return {
+        "filtered_text": filtered_text,
+        "raw_text": raw_text,
+        "omitted_text": omitted_text,
+        "filtered_count": len(filtered_lines),
+        "raw_count": len(raw_lines),
+        "omitted_count": len(omitted_names),
+    }
 
 
 def _unwrap_json_strings(raw: Any, max_depth: int = 8) -> Any:
@@ -359,6 +434,14 @@ def _mappable_from_data(data: Dict[str, Any]) -> List[Dict[str, Any]]:
     return rows
 
 
+def _csv_to_list(raw: Any) -> List[str]:
+    if isinstance(raw, list):
+        return [str(v).strip() for v in raw if str(v).strip()]
+    if isinstance(raw, str):
+        return [part.strip() for part in raw.split(",") if part.strip()]
+    return []
+
+
 def _ensure_mappable(body: Dict[str, Any], data: Dict[str, Any]) -> List[Dict[str, Any]]:
     mappable = body.get("mappable_field_data")
     if isinstance(mappable, list) and len(mappable) > 0:
@@ -378,7 +461,7 @@ def _load_clients() -> List[Dict[str, Any]]:
     return []
 
 
-def _resolve_lead_route(page_id: str) -> Optional[Dict[str, str]]:
+def _resolve_lead_route(page_id: str) -> Optional[Dict[str, Any]]:
     if not page_id:
         return None
     clients = _load_clients()
@@ -394,11 +477,14 @@ def _resolve_lead_route(page_id: str) -> Optional[Dict[str, str]]:
             "group_id": group_id,
             "phone_number": str(c.get("lead_phone_number", "")).strip(),
             "template": str(c.get("lead_template", "")).strip() or "default",
+            "exclude_exact": _csv_to_list(c.get("lead_exclude_fields")),
+            "exclude_contains": _csv_to_list(c.get("lead_exclude_contains")),
+            "exclude_regex": _csv_to_list(c.get("lead_exclude_regex")),
         }
     return None
 
 
-def _resolve_legacy_lorena_route() -> Optional[Dict[str, str]]:
+def _resolve_legacy_lorena_route() -> Optional[Dict[str, Any]]:
     """
     Compatibilidade do endpoint legado:
     se payload antigo nao trouxer page_id, cai no cliente Lorena.
@@ -415,6 +501,9 @@ def _resolve_legacy_lorena_route() -> Optional[Dict[str, str]]:
             "group_id": group_id,
             "phone_number": "",
             "template": template or "lorena",
+            "exclude_exact": [],
+            "exclude_contains": [],
+            "exclude_regex": [],
         }
     return None
 
@@ -445,9 +534,15 @@ def _check_webhook_secret() -> Optional[Tuple[Any, int]]:
     return jsonify({"ok": False, "error": "unauthorized"}), 401
 
 
-def _base_message_fields(body: Dict[str, Any]) -> Dict[str, str]:
+def _base_message_fields(body: Dict[str, Any], route: Optional[Dict[str, Any]] = None) -> Dict[str, str]:
     data = body.get("data") if isinstance(body.get("data"), dict) else {}
     mappable = _ensure_mappable(body, data)
+    global_rules = get_filter_rules("meta_lead")
+    client_rules = {
+        "exclude_exact": [str(v).strip().lower() for v in ((route or {}).get("exclude_exact") or []) if str(v).strip()],
+        "exclude_contains": [str(v).strip().lower() for v in ((route or {}).get("exclude_contains") or []) if str(v).strip()],
+        "exclude_regex": [str(v).strip() for v in ((route or {}).get("exclude_regex") or []) if str(v).strip()],
+    }
 
     nome = _format_field_value(data.get("nome_completo")) or _mappable_lookup(mappable, "nome_completo")
     email = _format_field_value(data.get("email")) or _mappable_lookup(mappable, "email")
@@ -455,17 +550,28 @@ def _base_message_fields(body: Dict[str, Any]) -> Dict[str, str]:
     if telefone_raw is None or telefone_raw == "":
         telefone_raw = _mappable_lookup(mappable, "telefone")
     wa_link = _format_whatsapp_line(telefone_raw)
+    telefone_digitos = _digits_only(telefone_raw)
 
-    respostas = _build_respostas_text(mappable)
-    if not respostas:
-        respostas = "(nenhuma resposta adicional)"
+    respostas_bundle = _build_respostas_bundle(
+        mappable,
+        global_rules=global_rules,
+        client_rules=client_rules,
+    )
 
     return {
         "nome": nome or "(nao informado)",
         "email": email or "(nao informado)",
         "whatsapp": wa_link,
+        "telefone_digitos": telefone_digitos or "(nao informado)",
         "form_name": _extract_form_name(body),
-        "respostas": respostas,
+        "respostas": respostas_bundle["filtered_text"],
+        "respostas_filtradas": respostas_bundle["filtered_text"],
+        "respostas_raw": respostas_bundle["raw_text"],
+        "respostas_omitidas": respostas_bundle["omitted_text"],
+        "respostas_count": str(respostas_bundle["filtered_count"]),
+        "respostas_raw_count": str(respostas_bundle["raw_count"]),
+        "respostas_omitidas_count": str(respostas_bundle["omitted_count"]),
+        "received_at": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
     }
 
 
@@ -545,8 +651,8 @@ def _truncate_message(msg: str) -> str:
     return msg[:cut] + "\n...(truncado)"
 
 
-def _format_default_lead_message(body: Dict[str, Any], client_name: str) -> str:
-    base = _base_message_fields(body)
+def _format_default_lead_message(body: Dict[str, Any], client_name: str, route: Optional[Dict[str, Any]] = None) -> str:
+    base = _base_message_fields(body, route=route)
     msg = (
         f"Novo lead - {client_name}\n"
         f"Nome do Lead: {base['nome']}\n"
@@ -561,8 +667,12 @@ def _format_default_lead_message(body: Dict[str, Any], client_name: str) -> str:
     return _truncate_message(msg)
 
 
-def _format_pratical_life_lead_message(body: Dict[str, Any], client_name: str) -> str:
-    base = _base_message_fields(body)
+def _format_pratical_life_lead_message(
+    body: Dict[str, Any],
+    client_name: str,
+    route: Optional[Dict[str, Any]] = None,
+) -> str:
+    base = _base_message_fields(body, route=route)
     msg = (
         f"Novo lead recebido - {client_name}\n"
         f"Contato:\n"
@@ -577,31 +687,47 @@ def _format_pratical_life_lead_message(body: Dict[str, Any], client_name: str) -
     return _truncate_message(msg)
 
 
-TEMPLATE_FORMATTERS: Dict[str, Callable[[Dict[str, Any], str], str]] = {
+TEMPLATE_FORMATTERS: Dict[str, Callable[[Dict[str, Any], str, Optional[Dict[str, Any]]], str]] = {
     "default": _format_default_lead_message,
     "lorena": _format_default_lead_message,
     "pratical_life": _format_pratical_life_lead_message,
 }
 
 
-def _format_lead_message(body: Dict[str, Any], template_id: str, client_name: str) -> str:
+def _format_lead_message(
+    body: Dict[str, Any],
+    template_id: str,
+    client_name: str,
+    route: Optional[Dict[str, Any]] = None,
+    page_id: str = "",
+) -> str:
     custom_content = get_template_content("meta_lead", template_id)
     if custom_content:
-        base = _base_message_fields(body)
+        base = _base_message_fields(body, route=route)
         rendered = render_template_text(
             custom_content,
             {
                 "client_name": client_name,
+                "page_id": page_id,
+                "template_id": template_id,
                 "nome": base["nome"],
                 "email": base["email"],
                 "whatsapp": base["whatsapp"],
+                "telefone_digitos": base["telefone_digitos"],
                 "form_name": base["form_name"],
                 "respostas": base["respostas"],
+                "respostas_filtradas": base["respostas_filtradas"],
+                "respostas_raw": base["respostas_raw"],
+                "respostas_omitidas": base["respostas_omitidas"],
+                "respostas_count": base["respostas_count"],
+                "respostas_raw_count": base["respostas_raw_count"],
+                "respostas_omitidas_count": base["respostas_omitidas_count"],
+                "received_at": base["received_at"],
             },
         )
         return _truncate_message(rendered)
     formatter = TEMPLATE_FORMATTERS.get(template_id, TEMPLATE_FORMATTERS["default"])
-    return formatter(body, client_name)
+    return formatter(body, client_name, route)
 
 
 def _handle_meta_new_lead(endpoint_label: str, allow_legacy_lorena_fallback: bool = False) -> Tuple[Any, int]:
@@ -764,7 +890,13 @@ def _handle_meta_new_lead(endpoint_label: str, allow_legacy_lorena_fallback: boo
             continue
 
         try:
-            message = _format_lead_message(body, route["template"], route["client_name"])
+            message = _format_lead_message(
+                body,
+                route["template"],
+                route["client_name"],
+                route=route,
+                page_id=page_id,
+            )
             _emit_runtime_event(
                 stage="MENSAGEM_FORMATADA",
                 status="ok",
@@ -938,6 +1070,11 @@ def dash_api_message_templates():
 @app.put("/dash/api/message-templates/<channel>/<template_id>")
 def dash_api_upsert_message_template(channel: str, template_id: str):
     return dashboard_module.api_upsert_message_template(channel, template_id)
+
+
+@app.put("/dash/api/message-filters/<channel>")
+def dash_api_upsert_message_filters(channel: str):
+    return dashboard_module.api_upsert_message_filters(channel)
 
 
 @app.post("/dash/api/message-templates/preview")
