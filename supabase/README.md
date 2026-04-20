@@ -6,7 +6,10 @@ No painel Supabase: **SQL Editor** → cole o conteúdo de `migrations/001_initi
 
 > O MCP do Cursor com `read_only=true` **não** executa `CREATE TABLE`. Ou usas o SQL Editor, ou alteras a URL do MCP no Cursor para `read_only=false` (se a tua organização permitir).
 
-Para a **aba Grupos WhatsApp** (catálogo via webhook Evolution), executa também `migrations/002_whatsapp_catalog_groups.sql` (tabela `whatsapp_catalog_groups`).
+Para a **aba Grupos WhatsApp** (catálogo via webhook Evolution), executa também, **por ordem**:
+
+1. `migrations/002_whatsapp_catalog_groups.sql` — tabela `whatsapp_catalog_groups`.
+2. `migrations/003_whatsapp_catalog_groups_supabase.sql` — constraint de JID, trigger `updated_at` e comentários nas colunas (recomendado no painel Supabase).
 
 ## 2. Connection string (Easypanel)
 

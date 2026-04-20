@@ -1,5 +1,6 @@
 -- Catálogo de grupos WhatsApp (webhook Evolution + aba Pulseboard).
 -- Executar no SQL Editor do Supabase após 001_initial_pulseboard.sql.
+-- Depois correr 003_whatsapp_catalog_groups_supabase.sql (constraint, trigger updated_at, COMMENTs).
 
 CREATE TABLE IF NOT EXISTS whatsapp_catalog_groups (
   group_jid TEXT PRIMARY KEY,
