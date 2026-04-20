@@ -13,6 +13,12 @@ from __future__ import annotations
 import hmac
 import json
 import os
+import sys
+
+# Raiz do projeto no path (ex.: python /app/execution/dashboard_app.py no container)
+_proj_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _proj_root not in sys.path:
+    sys.path.insert(0, _proj_root)
 import re
 import secrets
 import threading

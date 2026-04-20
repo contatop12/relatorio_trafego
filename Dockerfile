@@ -2,6 +2,9 @@ FROM python:3.11-alpine
 
 WORKDIR /app
 
+# Imports `from execution.*` ao correr scripts em /app/execution/*.py
+ENV PYTHONPATH=/app
+
 # Instala timezone data
 RUN apk add --no-cache tzdata
 
