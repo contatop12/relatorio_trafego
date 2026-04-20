@@ -507,6 +507,62 @@ textarea {
   cursor: pointer;
 }
 
+.chips-control {
+  border: 1px solid var(--line);
+  background: #0b0f16;
+  color: var(--text);
+  border-radius: 12px;
+  min-height: 44px;
+  padding: 5px 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.chips-control:focus-within {
+  border-color: rgba(129, 168, 255, 0.9);
+  box-shadow: 0 0 0 1px rgba(129, 168, 255, 0.35) inset;
+}
+
+.chips-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-size: 12px;
+  border: 1px solid rgba(81, 160, 255, 0.7);
+  background: rgba(37, 132, 255, 0.16);
+  color: #b9ddff;
+}
+
+.chip-remove {
+  border: none;
+  background: transparent;
+  color: #d5e8ff;
+  font-weight: 700;
+  padding: 0;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.chips-entry {
+  border: none;
+  background: transparent;
+  outline: none;
+  min-width: 220px;
+  flex: 1;
+  padding: 6px 4px;
+  color: var(--text);
+}
+
 .preview-box {
   margin: 8px 0 0;
   white-space: pre-wrap;

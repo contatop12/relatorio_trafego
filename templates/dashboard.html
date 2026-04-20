@@ -70,11 +70,27 @@
             </label>
             <label>
               Excluir perguntas (CSV)
-              <input name="lead_exclude_fields" placeholder="utm_source, referencia" />
+              <div class="chips-control" data-chip-for="lead_exclude_fields">
+                <div class="chips-list"></div>
+                <input
+                  type="text"
+                  class="chips-entry"
+                  placeholder="Digite uma palavra-chave e pressione Enter"
+                />
+              </div>
+              <input type="hidden" name="lead_exclude_fields" />
             </label>
             <label>
               Excluir se contiver (CSV)
-              <input name="lead_exclude_contains" placeholder="utm_, referencia" />
+              <div class="chips-control" data-chip-for="lead_exclude_contains">
+                <div class="chips-list"></div>
+                <input
+                  type="text"
+                  class="chips-entry"
+                  placeholder="Digite uma palavra-chave e pressione Enter"
+                />
+              </div>
+              <input type="hidden" name="lead_exclude_contains" />
             </label>
             <label class="check">
               <input type="checkbox" name="enabled" checked />
@@ -206,15 +222,39 @@
           <form id="filtersForm" class="new-client-grid">
             <label>
               Excluir perguntas exatas (CSV)
-              <input name="exclude_exact" placeholder="utm_source, referencia" />
+              <div class="chips-control" data-chip-for="exclude_exact">
+                <div class="chips-list"></div>
+                <input
+                  type="text"
+                  class="chips-entry"
+                  placeholder="Digite uma palavra-chave e pressione Enter"
+                />
+              </div>
+              <input type="hidden" name="exclude_exact" />
             </label>
             <label>
               Excluir se contiver (CSV)
-              <input name="exclude_contains" placeholder="utm_, referencia" />
+              <div class="chips-control" data-chip-for="exclude_contains">
+                <div class="chips-list"></div>
+                <input
+                  type="text"
+                  class="chips-entry"
+                  placeholder="Digite uma palavra-chave e pressione Enter"
+                />
+              </div>
+              <input type="hidden" name="exclude_contains" />
             </label>
             <label>
               Excluir por regex (CSV)
-              <input name="exclude_regex" placeholder="^utm_, .*referencia.*" />
+              <div class="chips-control" data-chip-for="exclude_regex">
+                <div class="chips-list"></div>
+                <input
+                  type="text"
+                  class="chips-entry"
+                  placeholder="Digite uma regex e pressione Enter"
+                />
+              </div>
+              <input type="hidden" name="exclude_regex" />
             </label>
             <button type="submit" class="primary">Salvar filtros globais</button>
           </form>
@@ -294,15 +334,39 @@
             </label>
             <label>
               Excluir perguntas (CSV)
-              <input name="lead_exclude_fields" />
+              <div class="chips-control" data-chip-for="lead_exclude_fields">
+                <div class="chips-list"></div>
+                <input
+                  type="text"
+                  class="chips-entry"
+                  placeholder="Digite uma palavra-chave e pressione Enter"
+                />
+              </div>
+              <input type="hidden" name="lead_exclude_fields" />
             </label>
             <label>
               Excluir se contiver (CSV)
-              <input name="lead_exclude_contains" />
+              <div class="chips-control" data-chip-for="lead_exclude_contains">
+                <div class="chips-list"></div>
+                <input
+                  type="text"
+                  class="chips-entry"
+                  placeholder="Digite uma palavra-chave e pressione Enter"
+                />
+              </div>
+              <input type="hidden" name="lead_exclude_contains" />
             </label>
             <label>
               Excluir por regex (CSV)
-              <input name="lead_exclude_regex" placeholder="^utm_, .*referencia.*" />
+              <div class="chips-control" data-chip-for="lead_exclude_regex">
+                <div class="chips-list"></div>
+                <input
+                  type="text"
+                  class="chips-entry"
+                  placeholder="Digite uma regex e pressione Enter"
+                />
+              </div>
+              <input type="hidden" name="lead_exclude_regex" />
             </label>
             <label class="check">
               <input type="checkbox" name="enabled" />

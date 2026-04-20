@@ -11,6 +11,101 @@ const DASHBOARD_BASE =
 const apiUrl = (path) => `${DASHBOARD_BASE}${path}`;
 const flowSteps = ["RECEBIDO", "PAYLOAD_OK", "ROTA_RESOLVIDA", "MENSAGEM_FORMATADA", "WHATSAPP_ENVIADO_OK", "CONCLUIDO_OK"];
 
+function parseCsvValue(value) {
+  if (!value) return [];
+  return String(value)
+    .split(",")
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
+function uniqueKeepOrder(values) {
+  const seen = new Set();
+  const out = [];
+  values.forEach((v) => {
+    const key = v.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(v);
+  });
+  return out;
+}
+
+function stringifyCsv(values) {
+  return uniqueKeepOrder(values).join(", ");
+}
+
+function ensureChipControl(form, fieldName) {
+  const hidden = form.querySelector(`input[name="${fieldName}"]`);
+  const control = form.querySelector(`.chips-control[data-chip-for="${fieldName}"]`);
+  if (!hidden || !control) return;
+
+  const listEl = control.querySelector(".chips-list");
+  const entry = control.querySelector(".chips-entry");
+  if (!listEl || !entry) return;
+
+  const render = () => {
+    listEl.innerHTML = "";
+    const values = parseCsvValue(hidden.value);
+    values.forEach((value, index) => {
+      const chip = document.createElement("span");
+      chip.className = "chip-tag";
+      chip.innerHTML = `<span>${value}</span>`;
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "chip-remove";
+      btn.setAttribute("aria-label", `Remover ${value}`);
+      btn.textContent = "×";
+      btn.addEventListener("click", () => {
+        const next = parseCsvValue(hidden.value).filter((_, idx) => idx !== index);
+        hidden.value = stringifyCsv(next);
+        render();
+      });
+      chip.appendChild(btn);
+      listEl.appendChild(chip);
+    });
+  };
+
+  const addEntryValue = () => {
+    const raw = (entry.value || "").trim();
+    if (!raw) return;
+    const parts = raw
+      .split(",")
+      .map((x) => x.trim())
+      .filter(Boolean);
+    const current = parseCsvValue(hidden.value);
+    hidden.value = stringifyCsv([...current, ...parts]);
+    entry.value = "";
+    render();
+  };
+
+  if (control.dataset.ready !== "1") {
+    entry.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" || ev.key === ",") {
+        ev.preventDefault();
+        addEntryValue();
+        return;
+      }
+      if (ev.key === "Backspace" && !entry.value) {
+        const current = parseCsvValue(hidden.value);
+        if (!current.length) return;
+        hidden.value = stringifyCsv(current.slice(0, -1));
+        render();
+      }
+    });
+    entry.addEventListener("blur", addEntryValue);
+    control.addEventListener("click", () => entry.focus());
+    control.dataset.ready = "1";
+  }
+
+  control._chipRender = render;
+  render();
+}
+
+function setupChipFields(form, names) {
+  names.forEach((name) => ensureChipControl(form, name));
+}
+
 function fmtTime(iso) {
   if (!iso) return "--:--:--";
   return new Date(iso).toLocaleTimeString("pt-BR");
@@ -128,6 +223,7 @@ function renderMetaClients() {
     editForm.elements.lead_exclude_contains.value = (client.lead_exclude_contains || []).join(", ");
     editForm.elements.lead_exclude_regex.value = (client.lead_exclude_regex || []).join(", ");
     editForm.elements.enabled.checked = !!client.enabled;
+    setupChipFields(editForm, ["lead_exclude_fields", "lead_exclude_contains", "lead_exclude_regex"]);
 
     card.querySelector('[data-action="toggle-edit"]').addEventListener("click", () => {
       editForm.classList.toggle("hidden");
@@ -291,6 +387,7 @@ function renderFiltersForm() {
   form.elements.exclude_exact.value = (rules.exclude_exact || []).join(", ");
   form.elements.exclude_contains.value = (rules.exclude_contains || []).join(", ");
   form.elements.exclude_regex.value = (rules.exclude_regex || []).join(", ");
+  setupChipFields(form, ["exclude_exact", "exclude_contains", "exclude_regex"]);
 }
 
 async function fetchMetaClients() {
@@ -344,6 +441,7 @@ async function submitNewMetaClient(ev) {
   feedback.textContent = "Cliente Meta adicionado com sucesso.";
   form.reset();
   form.querySelector('input[name="enabled"]').checked = true;
+  setupChipFields(form, ["lead_exclude_fields", "lead_exclude_contains"]);
   await fetchMetaClients();
 }
 
@@ -519,6 +617,8 @@ function bindUI() {
   document.getElementById("refreshTemplatesBtn").addEventListener("click", fetchTemplates);
   document.getElementById("previewBtn").addEventListener("click", generateTemplatePreview);
   document.getElementById("tplChannel").addEventListener("change", (ev) => renderTemplateVariables(ev.target.value));
+  setupChipFields(document.getElementById("newClientForm"), ["lead_exclude_fields", "lead_exclude_contains"]);
+  setupChipFields(document.getElementById("filtersForm"), ["exclude_exact", "exclude_contains", "exclude_regex"]);
 }
 
 async function boot() {
