@@ -43,68 +43,80 @@
             <h2>Novo cliente Meta</h2>
             <p>Cadastro direto em <code>clients.json</code>.</p>
           </div>
-          <form id="newClientForm" class="new-client-grid">
-            <label>
-              Nome do cliente
-              <input name="client_name" required placeholder="Ex.: Lorena Carvalho" />
-            </label>
-            <label>
-              Conta Meta
-              <input name="ad_account_id" required placeholder="act_123456789" />
-            </label>
-            <label>
-              Grupo relatório
-              <input name="group_id" required placeholder="1203...@g.us" />
-            </label>
-            <label>
-              Meta page id
-              <input name="meta_page_id" placeholder="102086421781424" />
-            </label>
-            <label>
-              Grupo leads
-              <input name="lead_group_id" placeholder="1203...@g.us" />
-            </label>
-            <label>
-              Template lead
-              <select
-                name="lead_template"
-                id="newClientLeadTemplate"
-                class="field-select lead-template-select"
-                required
-              >
-                <option value="default">Carregando…</option>
-              </select>
-              <span class="field-hint">Integrados ou templates criados na aba Templates.</span>
-            </label>
-            <label>
-              Excluir perguntas (CSV)
-              <div class="chips-control" data-chip-for="lead_exclude_fields">
-                <div class="chips-list"></div>
-                <input
-                  type="text"
-                  class="chips-entry"
-                  placeholder="Digite uma palavra-chave e pressione Enter"
-                />
+          <form id="newClientForm" class="new-client-form">
+            <div class="new-client-fields" aria-label="Dados do cliente">
+              <label>
+                Nome do cliente
+                <input name="client_name" required placeholder="Ex.: Lorena Carvalho" />
+              </label>
+              <label>
+                Conta Meta
+                <input name="ad_account_id" required placeholder="act_123456789" />
+              </label>
+              <label>
+                Grupo relatório
+                <input name="group_id" required placeholder="1203...@g.us" />
+              </label>
+              <label>
+                Meta page id
+                <input name="meta_page_id" placeholder="102086421781424" />
+              </label>
+              <label>
+                Grupo leads
+                <input name="lead_group_id" placeholder="1203...@g.us" />
+              </label>
+              <label class="new-client-field-template">
+                Template lead
+                <select
+                  name="lead_template"
+                  id="newClientLeadTemplate"
+                  class="field-select lead-template-select"
+                  required
+                >
+                  <option value="default">Carregando…</option>
+                </select>
+                <span class="field-hint">Integrados ou templates criados na aba Templates.</span>
+              </label>
+            </div>
+            <div class="new-client-filters">
+              <h3 class="new-client-filters-title">Filtros do formulário Meta</h3>
+              <p class="new-client-filters-desc">
+                Campos do lead a ignorar antes do envio ao WhatsApp. Use Enter para criar cada tag.
+              </p>
+              <div class="new-client-filters-grid">
+                <label>
+                  Excluir perguntas (nome exato)
+                  <div class="chips-control" data-chip-for="lead_exclude_fields">
+                    <div class="chips-list"></div>
+                    <input
+                      type="text"
+                      class="chips-entry"
+                      placeholder="Palavra-chave e Enter"
+                    />
+                  </div>
+                  <input type="hidden" name="lead_exclude_fields" />
+                </label>
+                <label>
+                  Excluir se o nome contiver
+                  <div class="chips-control" data-chip-for="lead_exclude_contains">
+                    <div class="chips-list"></div>
+                    <input
+                      type="text"
+                      class="chips-entry"
+                      placeholder="Palavra-chave e Enter"
+                    />
+                  </div>
+                  <input type="hidden" name="lead_exclude_contains" />
+                </label>
               </div>
-              <input type="hidden" name="lead_exclude_fields" />
-            </label>
-            <label>
-              Excluir se contiver (CSV)
-              <div class="chips-control" data-chip-for="lead_exclude_contains">
-                <div class="chips-list"></div>
-                <input
-                  type="text"
-                  class="chips-entry"
-                  placeholder="Digite uma palavra-chave e pressione Enter"
-                />
-              </div>
-              <input type="hidden" name="lead_exclude_contains" />
-            </label>
-            <label class="check">
-              <input type="checkbox" name="enabled" checked />
-              <span>Automação ativa</span>
-            </label>
-            <button type="submit" class="primary">Adicionar cliente Meta</button>
+            </div>
+            <div class="new-client-actions">
+              <label class="check">
+                <input type="checkbox" name="enabled" checked />
+                <span>Automação ativa</span>
+              </label>
+              <button type="submit" class="primary">Adicionar cliente Meta</button>
+            </div>
           </form>
           <p id="formFeedback" class="feedback"></p>
         </section>
@@ -126,36 +138,40 @@
             <h2>Novo cliente Google Ads</h2>
             <p>Cadastro direto em <code>google_clients.json</code>.</p>
           </div>
-          <form id="newGoogleClientForm" class="new-client-grid">
-            <label>
-              Nome do cliente
-              <input name="client_name" required placeholder="Ex.: Practical Life Jardim Prudencia" />
-            </label>
-            <label>
-              Google customer id
-              <input name="google_customer_id" required placeholder="253-906-3374" />
-            </label>
-            <label>
-              Grupo WhatsApp
-              <input name="group_id" required placeholder="1203...@g.us" />
-            </label>
-            <label>
-              Template Google
-              <input name="google_template" value="default" placeholder="default / personalizado" />
-            </label>
-            <label>
-              Conversões primárias (CSV)
-              <input name="primary_conversions" placeholder="Formulário, WhatsApp, Ligação" />
-            </label>
-            <label>
-              Observações
-              <input name="notes" placeholder="Opcional" />
-            </label>
-            <label class="check">
-              <input type="checkbox" name="enabled" checked />
-              <span>Automação ativa</span>
-            </label>
-            <button type="submit" class="primary">Adicionar cliente Google</button>
+          <form id="newGoogleClientForm" class="new-client-form">
+            <div class="new-client-fields" aria-label="Dados do cliente Google">
+              <label>
+                Nome do cliente
+                <input name="client_name" required placeholder="Ex.: Practical Life Jardim Prudencia" />
+              </label>
+              <label>
+                Google customer id
+                <input name="google_customer_id" required placeholder="253-906-3374" />
+              </label>
+              <label>
+                Grupo WhatsApp
+                <input name="group_id" required placeholder="1203...@g.us" />
+              </label>
+              <label>
+                Template Google
+                <input name="google_template" value="default" placeholder="default / personalizado" />
+              </label>
+              <label>
+                Conversões primárias (CSV)
+                <input name="primary_conversions" placeholder="Formulário, WhatsApp, Ligação" />
+              </label>
+              <label>
+                Observações
+                <input name="notes" placeholder="Opcional" />
+              </label>
+            </div>
+            <div class="new-client-actions">
+              <label class="check">
+                <input type="checkbox" name="enabled" checked />
+                <span>Automação ativa</span>
+              </label>
+              <button type="submit" class="primary">Adicionar cliente Google</button>
+            </div>
           </form>
           <p id="googleFormFeedback" class="feedback"></p>
         </section>
@@ -227,44 +243,48 @@
             <h2>Filtros globais de perguntas (Meta Lead)</h2>
             <p>Define quais chaves não devem ir no texto final.</p>
           </div>
-          <form id="filtersForm" class="new-client-grid">
-            <label>
-              Excluir perguntas exatas (CSV)
-              <div class="chips-control" data-chip-for="exclude_exact">
-                <div class="chips-list"></div>
-                <input
-                  type="text"
-                  class="chips-entry"
-                  placeholder="Digite uma palavra-chave e pressione Enter"
-                />
-              </div>
-              <input type="hidden" name="exclude_exact" />
-            </label>
-            <label>
-              Excluir se contiver (CSV)
-              <div class="chips-control" data-chip-for="exclude_contains">
-                <div class="chips-list"></div>
-                <input
-                  type="text"
-                  class="chips-entry"
-                  placeholder="Digite uma palavra-chave e pressione Enter"
-                />
-              </div>
-              <input type="hidden" name="exclude_contains" />
-            </label>
-            <label>
-              Excluir por regex (CSV)
-              <div class="chips-control" data-chip-for="exclude_regex">
-                <div class="chips-list"></div>
-                <input
-                  type="text"
-                  class="chips-entry"
-                  placeholder="Digite uma regex e pressione Enter"
-                />
-              </div>
-              <input type="hidden" name="exclude_regex" />
-            </label>
-            <button type="submit" class="primary">Salvar filtros globais</button>
+          <form id="filtersForm" class="filters-form">
+            <div class="new-client-filters-grid" aria-label="Regras de exclusão">
+              <label>
+                Excluir perguntas exatas (CSV)
+                <div class="chips-control" data-chip-for="exclude_exact">
+                  <div class="chips-list"></div>
+                  <input
+                    type="text"
+                    class="chips-entry"
+                    placeholder="Digite uma palavra-chave e pressione Enter"
+                  />
+                </div>
+                <input type="hidden" name="exclude_exact" />
+              </label>
+              <label>
+                Excluir se contiver (CSV)
+                <div class="chips-control" data-chip-for="exclude_contains">
+                  <div class="chips-list"></div>
+                  <input
+                    type="text"
+                    class="chips-entry"
+                    placeholder="Digite uma palavra-chave e pressione Enter"
+                  />
+                </div>
+                <input type="hidden" name="exclude_contains" />
+              </label>
+              <label>
+                Excluir por regex (CSV)
+                <div class="chips-control" data-chip-for="exclude_regex">
+                  <div class="chips-list"></div>
+                  <input
+                    type="text"
+                    class="chips-entry"
+                    placeholder="Digite uma regex e pressione Enter"
+                  />
+                </div>
+                <input type="hidden" name="exclude_regex" />
+              </label>
+            </div>
+            <div class="new-client-actions filters-form-actions">
+              <button type="submit" class="primary">Salvar filtros globais</button>
+            </div>
           </form>
           <p id="filtersFeedback" class="feedback"></p>
         </section>
