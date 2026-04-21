@@ -528,6 +528,16 @@ def catalog_group_should_process(group_jid: str) -> bool:
     return bool(row.get("monitoring_enabled", True))
 
 
+def new_catalog_group_monitoring_default() -> bool:
+    """
+    Valor inicial de monitoring_enabled ao criar um grupo novo.
+
+    Sempre False: o catálogo só passa a actualizar actividade desse JID depois de alguém
+    enviar no grupo a frase obrigatória «Ativar grupo» (ver evolution_catalog_webhook).
+    """
+    return False
+
+
 def upsert_catalog_group_activity(
     group_jid: str,
     *,
@@ -556,12 +566,13 @@ def upsert_catalog_group_activity(
                 ex = cur.fetchone()
                 if ex and not bool(ex.get("monitoring_enabled", True)):
                     return False
+                mon_ins = new_catalog_group_monitoring_default()
                 cur.execute(
                     """
                     INSERT INTO whatsapp_catalog_groups (
                       group_jid, subject, monitoring_enabled, last_activity_at,
                       last_event_type, last_push_name, last_preview, updated_at
-                    ) VALUES (%s, '', true, now(), %s, %s, %s, now())
+                    ) VALUES (%s, '', %s, now(), %s, %s, %s, now())
                     ON CONFLICT (group_jid) DO UPDATE SET
                       last_activity_at = now(),
                       last_event_type = EXCLUDED.last_event_type,
@@ -570,7 +581,7 @@ def upsert_catalog_group_activity(
                       updated_at = now()
                     WHERE whatsapp_catalog_groups.monitoring_enabled = true
                     """,
-                    (gj, et, pn, pv),
+                    (gj, mon_ins, et, pn, pv),
                 )
         return True
     with _CATALOG_JSON_LOCK:
@@ -590,7 +601,7 @@ def upsert_catalog_group_activity(
                 {
                     "group_jid": gj,
                     "subject": "",
-                    "monitoring_enabled": True,
+                    "monitoring_enabled": new_catalog_group_monitoring_default(),
                     "last_activity_at": now_iso,
                     "last_event_type": et,
                     "last_push_name": pn,

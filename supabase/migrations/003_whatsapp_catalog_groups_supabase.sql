@@ -31,7 +31,7 @@ DROP TRIGGER IF EXISTS trg_whatsapp_catalog_groups_updated_at
 CREATE TRIGGER trg_whatsapp_catalog_groups_updated_at
   BEFORE UPDATE ON public.whatsapp_catalog_groups
   FOR EACH ROW
-  EXECUTE PROCEDURE public.pulseboard_touch_whatsapp_catalog_groups_updated_at();
+  EXECUTE FUNCTION public.pulseboard_touch_whatsapp_catalog_groups_updated_at();
 
 COMMENT ON COLUMN whatsapp_catalog_groups.group_jid IS 'JID do grupo (ex. 120363...@g.us)';
 COMMENT ON COLUMN whatsapp_catalog_groups.subject IS 'Nome do grupo (Evolution findGroupInfos ou edição manual)';

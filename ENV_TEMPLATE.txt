@@ -43,6 +43,10 @@ EVOLUTION_CATALOG_WEBHOOK_SECRET=
 # Só dev local: 1/true permite receber webhook sem secret (nunca em produção).
 # EVOLUTION_CATALOG_ALLOW_INSECURE=
 
+# Catálogo de grupos (Pulseboard): é obrigatório enviar no grupo a frase «Ativar grupo» para ligar
+# o monitoramento daquele JID; até lá o grupo pode aparecer na lista em pausa. Maiúsculas/acentos
+# na mensagem são ignorados na detecção. Mensagens próprias (fromMe) contam se a Evolution as enviar no webhook.
+
 # -----------------------------------------------------------------------------
 # Dashboard (Pulseboard) — porta interna; no Easypanel expor HTTPS para esta porta
 # -----------------------------------------------------------------------------

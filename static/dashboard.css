@@ -1307,6 +1307,123 @@ textarea {
   color: #9eb7ff;
 }
 
+.groups-live-flow {
+  margin: 20px 0 24px;
+  padding: 18px 20px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: rgba(8, 10, 16, 0.55);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.groups-live-flow-head {
+  margin-bottom: 14px;
+}
+
+.groups-live-flow-title {
+  margin: 0 0 6px;
+  font-family: "Bebas Neue", sans-serif;
+  font-size: 22px;
+  letter-spacing: 0.06em;
+  color: var(--text);
+}
+
+.groups-live-flow-hint {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.groups-live-flow-hint strong {
+  color: #b8c4e8;
+  font-weight: 700;
+}
+
+.catalog-flow-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.catalog-flow-empty {
+  margin: 0;
+  padding: 14px 12px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+  border-radius: 12px;
+  border: 1px dashed rgba(122, 140, 180, 0.35);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.catalog-flow-item {
+  border-radius: 12px;
+  padding: 10px 12px 11px;
+  border: 1px solid rgba(42, 48, 66, 0.9);
+  border-left-width: 3px;
+  background: rgba(12, 14, 22, 0.75);
+  font-size: 13px;
+}
+
+.catalog-flow-item.st-info {
+  border-left-color: rgba(158, 183, 255, 0.65);
+}
+
+.catalog-flow-item.st-ok {
+  border-left-color: rgba(104, 241, 159, 0.7);
+}
+
+.catalog-flow-item.st-warning {
+  border-left-color: rgba(255, 196, 120, 0.75);
+}
+
+.catalog-flow-item.st-error {
+  border-left-color: rgba(255, 120, 138, 0.85);
+  background: rgba(255, 72, 96, 0.06);
+}
+
+.catalog-flow-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 12px;
+  margin-bottom: 4px;
+}
+
+.catalog-flow-agent {
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 10px;
+  color: #9eb7ff;
+}
+
+.catalog-flow-stage {
+  font-weight: 700;
+  font-size: 11px;
+  color: var(--text);
+  flex: 1 1 auto;
+}
+
+.catalog-flow-time {
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: var(--muted);
+  margin-left: auto;
+}
+
+.catalog-flow-detail {
+  color: var(--muted);
+  line-height: 1.45;
+  word-break: break-word;
+}
+
 .catalog-groups-wrap {
   overflow-x: auto;
   border-radius: 16px;

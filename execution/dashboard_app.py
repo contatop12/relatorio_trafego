@@ -539,7 +539,22 @@ def evolution_catalog_webhook_view() -> Any:
                 raw = None
     if raw is None:
         log_evolution_catalog_warning("JSON_INVALIDO", "corpo vazio ou nao e JSON valido")
+        publish_event(
+            source="catalog_http",
+            stage="JSON_INVALIDO",
+            status="error",
+            detail="Corpo do POST vazio ou não é JSON válido",
+            payload={"content_type": (request.content_type or "")[:120]},
+        )
         return jsonify({"ok": False, "error": "invalid_json"}), 400
+    cl = request.content_length
+    publish_event(
+        source="catalog_http",
+        stage="POST_RECEBIDO",
+        status="info",
+        detail="POST /evolution-webhook recebido" + (f" (Content-Length: {cl})" if cl is not None else ""),
+        payload={"path": (request.path or "")[:120]},
+    )
     hdr = (request.headers.get("X-Webhook-Secret") or "").strip()
     auth = request.headers.get("Authorization") or ""
     bearer = ""

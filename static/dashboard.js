@@ -2,6 +2,7 @@ const state = {
   metaClients: [],
   googleClients: [],
   catalogGroups: [],
+  catalogFlowEvents: [],
   templates: { channels: {}, variables: {}, filters: {} },
   eventsByClient: new Map(),
   eventStream: null,
@@ -657,7 +658,86 @@ async function simulateHarness(clientId, scenario) {
   if (!r.ok || !body.ok) alert(`Falha no harness: ${body.error || "desconhecido"}`);
 }
 
+function isCatalogFlowEvent(ev) {
+  return String(ev.source || "").toLowerCase().startsWith("catalog_");
+}
+
+function pushCatalogFlowEvent(ev) {
+  if (!isCatalogFlowEvent(ev)) return;
+  const list = state.catalogFlowEvents || [];
+  list.push(ev);
+  state.catalogFlowEvents = list.slice(-120);
+  if (document.getElementById("tab-groups")?.classList.contains("is-active")) {
+    renderCatalogFlow();
+  }
+}
+
+function catalogFlowItem(ev) {
+  const li = document.createElement("li");
+  li.className = `catalog-flow-item ${stageClass(ev.status)}`;
+  const agent = String(ev.source || "")
+    .replace(/^catalog_/i, "")
+    .trim() || "agente";
+  const head = document.createElement("div");
+  head.className = "catalog-flow-head";
+  const spAgent = document.createElement("span");
+  spAgent.className = "catalog-flow-agent";
+  spAgent.textContent = agent;
+  const spStage = document.createElement("span");
+  spStage.className = "catalog-flow-stage";
+  spStage.textContent = ev.stage || "";
+  const spTime = document.createElement("span");
+  spTime.className = "catalog-flow-time";
+  spTime.textContent = fmtTime(ev.timestamp);
+  head.append(spAgent, spStage, spTime);
+  const det = document.createElement("div");
+  det.className = "catalog-flow-detail";
+  let t = ev.detail || "";
+  const gid = (ev.group_id || "").trim();
+  if (gid) t = t ? `${t} · ${gid}` : gid;
+  det.textContent = t;
+  li.append(head, det);
+  return li;
+}
+
+function renderCatalogFlow() {
+  const ul = document.getElementById("catalogFlowList");
+  if (!ul) return;
+  ul.innerHTML = "";
+  const items = [...(state.catalogFlowEvents || [])].reverse();
+  if (!items.length) {
+    const li = document.createElement("li");
+    li.className = "catalog-flow-empty";
+    li.textContent =
+      "Sem eventos do catálogo ainda. Abra esta aba durante um POST da Evolution ou aguarde o stream.";
+    ul.appendChild(li);
+    return;
+  }
+  for (const ev of items) {
+    ul.appendChild(catalogFlowItem(ev));
+  }
+}
+
+async function fetchCatalogFlowHistory() {
+  const r = await dashFetch(apiUrl("/api/events/recent?limit=400"));
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) return;
+  const all = Array.isArray(body.events) ? body.events : [];
+  const cat = all.filter(isCatalogFlowEvent);
+  state.catalogFlowEvents = cat.slice(-120);
+  renderCatalogFlow();
+}
+
+async function ensureCatalogFlowHydrated() {
+  if ((state.catalogFlowEvents || []).length) {
+    renderCatalogFlow();
+    return;
+  }
+  await fetchCatalogFlowHistory();
+}
+
 function applyIncomingEvent(ev) {
+  pushCatalogFlowEvent(ev);
   const clientName = (ev.client_name || "").trim();
   if (!clientName) return;
   const list = state.eventsByClient.get(clientName) || [];
@@ -765,6 +845,7 @@ function bindTabs() {
       Object.values(panels).forEach((p) => p?.classList.remove("is-active"));
       panels[btn.dataset.tab]?.classList.add("is-active");
       if (btn.dataset.tab === "groups") {
+        ensureCatalogFlowHydrated().catch((e) => console.error(e));
         fetchCatalogGroups().catch((e) => console.error(e));
         fetchCatalogListenerState().catch((e) => console.error(e));
       }

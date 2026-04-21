@@ -350,6 +350,13 @@
                   Eventos só de aplicação ou chamadas não catalogam grupos, mas não atrapalham.
                 </li>
                 <li>
+                  <strong>Activar o grupo no catálogo</strong>: é <strong>obrigatório</strong> enviar no grupo a
+                  frase <code>Ativar grupo</code> (maiúsculas e acentos são aceites na detecção). Só depois disso
+                  o monitoramento desse JID fica ligado e as mensagens passam a actualizar a ficha do grupo.
+                  Mensagens suas também contam se a Evolution incluir <code>messages.upsert</code> com
+                  <code>fromMe</code> no webhook.
+                </li>
+                <li>
                   <strong>Carga no servidor</strong>: usa <strong>Ligar escuta</strong> / <strong>Pausar escuta</strong>
                   abaixo. Em pausa, o teu URL continua a responder <code>200</code> à Evolution mas não grava nem
                   chama a API de nomes — útil quando há muito tráfego.
@@ -376,6 +383,17 @@
             </div>
             <p id="catalogGroupsStatus" class="groups-status" aria-live="polite"></p>
           </div>
+
+          <section class="groups-live-flow" aria-labelledby="catalog-flow-title">
+            <div class="groups-live-flow-head">
+              <h3 id="catalog-flow-title" class="groups-live-flow-title">Fluxo em tempo real</h3>
+              <p class="groups-live-flow-hint">
+                Agentes do catálogo (HTTP → auth → parser → extract → store → Evolution). Erros aparecem em destaque;
+                o campo <strong>agente</strong> indica onde falhou.
+              </p>
+            </div>
+            <ul id="catalogFlowList" class="catalog-flow-list" aria-live="polite" aria-relevant="additions"></ul>
+          </section>
 
           <div id="catalogGroupsWrap" class="catalog-groups-wrap" aria-live="polite"></div>
 
