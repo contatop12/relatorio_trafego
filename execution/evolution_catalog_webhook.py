@@ -225,7 +225,25 @@ def process_evolution_catalog_payload(
     Processa JSON bruto do webhook. Retorna (dict resposta, status_http).
     """
     if not verify_evolution_catalog_webhook_secret(header_secret, auth_bearer):
-        return {"ok": False, "error": "unauthorized"}, 401
+        return {
+            "ok": False,
+            "error": "unauthorized",
+            "hint": (
+                "No servidor defina EVOLUTION_CATALOG_WEBHOOK_SECRET e na Evolution envie o mesmo valor em "
+                "X-Webhook-Secret ou Authorization: Bearer. Sem isso o catalogo rejeita o POST (401). "
+                "Só em teste local: EVOLUTION_CATALOG_ALLOW_INSECURE=1."
+            ),
+        }, 401
+
+    from execution import persistence
+
+    if not persistence.get_catalog_webhook_listening():
+        _evo_log(
+            "cod=LISTENER_PAUSADO | canal=catalogo_grupos | escuta desligada na Pulseboard — "
+            "HTTP 200 sem processar (menos carga)",
+            level=logging.INFO,
+        )
+        return {"ok": True, "ignored": True, "reason": "listener_paused"}, 200
 
     events = normalize_evolution_events(raw)
     if not events:
@@ -235,8 +253,6 @@ def process_evolution_catalog_payload(
             level=logging.INFO,
         )
         return {"ok": True, "processed": 0, "skipped": "no_events"}, 200
-
-    from execution import persistence
 
     processed = 0
     skipped_no_jid = 0

@@ -349,15 +349,31 @@
                   lista, eventos de chats/grupos (ex. <code>CHATS_UPSERT</code>, <code>CHATS_UPDATE</code>).
                   Eventos só de aplicação ou chamadas não catalogam grupos, mas não atrapalham.
                 </li>
+                <li>
+                  <strong>Carga no servidor</strong>: usa <strong>Ligar escuta</strong> / <strong>Pausar escuta</strong>
+                  abaixo. Em pausa, o teu URL continua a responder <code>200</code> à Evolution mas não grava nem
+                  chama a API de nomes — útil quando há muito tráfego.
+                </li>
               </ol>
             </div>
           </details>
 
           <div class="groups-toolbar">
-            <button type="button" id="refreshCatalogGroupsBtn" class="groups-btn-refresh">
-              <span class="groups-btn-ic" aria-hidden="true">↻</span>
-              Atualizar lista
-            </button>
+            <div class="groups-toolbar-primary">
+              <div class="groups-listener-cluster" role="group" aria-label="Escuta do webhook de catálogo">
+                <span id="catalogListenerBadge" class="groups-listener-badge" data-state="on">Escuta ativa</span>
+                <button type="button" id="catalogListenerOnBtn" class="groups-btn-listener groups-btn-listener--on">
+                  Ligar escuta
+                </button>
+                <button type="button" id="catalogListenerOffBtn" class="groups-btn-listener groups-btn-listener--off">
+                  Pausar escuta
+                </button>
+              </div>
+              <button type="button" id="refreshCatalogGroupsBtn" class="groups-btn-refresh">
+                <span class="groups-btn-ic" aria-hidden="true">↻</span>
+                Atualizar lista
+              </button>
+            </div>
             <p id="catalogGroupsStatus" class="groups-status" aria-live="polite"></p>
           </div>
 

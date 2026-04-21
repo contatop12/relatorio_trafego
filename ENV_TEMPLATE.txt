@@ -48,6 +48,8 @@ EVOLUTION_CATALOG_WEBHOOK_SECRET=
 # -----------------------------------------------------------------------------
 ENABLE_DASHBOARD=true
 DASHBOARD_PORT=8091
+# Se a Pulseboard abrir em https://teu-dominio/dash/ (proxy Easypanel), defina o prefixo para as chamadas API/JS:
+# DASHBOARD_URL_PREFIX=/dash
 
 # Login da dashboard (recomendado em produção com HTTPS)
 # Mesmo DASHBOARD_SESSION_SECRET no processo que serve /dash se usares webhook na mesma app.

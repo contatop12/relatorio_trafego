@@ -584,6 +584,19 @@ def api_catalog_groups_patch() -> Any:
     return jsonify({"ok": True, "group": updated})
 
 
+@app.route("/api/catalog-groups/webhook-listener", methods=["GET", "POST"])
+def api_catalog_webhook_listener() -> Any:
+    """Liga/desliga processamento do POST /evolution-webhook (ficheiro partilhado entre processos)."""
+    persistence.ensure_db_ready()
+    if request.method == "GET":
+        return jsonify({"ok": True, "listening": persistence.get_catalog_webhook_listening()})
+    payload = request.get_json(silent=True) or {}
+    if "listening" not in payload:
+        return jsonify({"ok": False, "error": "listening_obrigatorio_boolean"}), 400
+    persistence.set_catalog_webhook_listening(bool(payload["listening"]))
+    return jsonify({"ok": True, "listening": persistence.get_catalog_webhook_listening()})
+
+
 @app.post("/api/catalog-groups/refresh")
 def api_catalog_groups_refresh() -> Any:
     persistence.ensure_db_ready()
@@ -611,9 +624,17 @@ def api_catalog_groups_refresh() -> Any:
     return jsonify({"ok": True, "group": row, "fetched": bool(sub)})
 
 
+def _dashboard_public_url_prefix() -> str:
+    """
+    Prefixo publico da app (ex. /dash) quando o Easypanel expoe a Pulseboard em subcaminho.
+    Define DASHBOARD_URL_PREFIX=/dash para o meta tag dashboard-base e fetch() correctos.
+    """
+    return (os.getenv("DASHBOARD_URL_PREFIX") or "").strip().rstrip("/")
+
+
 @app.get("/")
 def dashboard_home() -> str:
-    return render_template("dashboard.html", dashboard_base="")
+    return render_template("dashboard.html", dashboard_base=_dashboard_public_url_prefix())
 
 
 @app.get("/api/clients")

@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional
 
 from execution.project_paths import (
     catalog_groups_json_path,
+    catalog_webhook_listener_json_path,
     clients_json_path,
     ensure_data_dir,
     google_clients_json_path,
@@ -27,6 +28,8 @@ from execution.project_paths import (
 logger = logging.getLogger(__name__)
 _DB_BOOTSTRAPPED = False
 _CATALOG_JSON_LOCK = threading.RLock()
+_LISTENER_JSON_LOCK = threading.RLock()
+_CATALOG_WEBHOOK_LISTENING_DEFAULT = True
 
 try:
     import psycopg
@@ -727,3 +730,31 @@ def patch_catalog_group_manual(
         found["updated_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S+00:00")
         _save_catalog_json(rows)
     return get_catalog_group(gj)
+
+
+def get_catalog_webhook_listening() -> bool:
+    """
+    Se False, POST /evolution-webhook responde 200 sem normalizar nem gravar (menos carga).
+    Estado em data/catalog_webhook_listener.json (visível por dashboard e meta_lead_webhook).
+    """
+    path = catalog_webhook_listener_json_path()
+    if not os.path.isfile(path):
+        return _CATALOG_WEBHOOK_LISTENING_DEFAULT
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+        if not isinstance(raw, dict):
+            return _CATALOG_WEBHOOK_LISTENING_DEFAULT
+        return bool(raw.get("listening", _CATALOG_WEBHOOK_LISTENING_DEFAULT))
+    except (OSError, json.JSONDecodeError):
+        return _CATALOG_WEBHOOK_LISTENING_DEFAULT
+
+
+def set_catalog_webhook_listening(listening: bool) -> None:
+    ensure_data_dir()
+    path = catalog_webhook_listener_json_path()
+    payload = {"listening": bool(listening)}
+    with _LISTENER_JSON_LOCK:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+            f.write("\n")

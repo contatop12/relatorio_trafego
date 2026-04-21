@@ -37,3 +37,8 @@ def message_templates_json_path() -> str:
 
 def catalog_groups_json_path() -> str:
     return os.path.join(DATA_DIR, "catalog_groups.json")
+
+
+def catalog_webhook_listener_json_path() -> str:
+    """Liga/desliga processamento global do POST /evolution-webhook (partilhado entre processos)."""
+    return os.path.join(DATA_DIR, "catalog_webhook_listener.json")

@@ -1376,6 +1376,11 @@ def dash_api_catalog_groups_refresh():
     return dashboard_module.api_catalog_groups_refresh()
 
 
+@app.route("/dash/api/catalog-groups/webhook-listener", methods=["GET", "POST"])
+def dash_api_catalog_webhook_listener():
+    return dashboard_module.api_catalog_webhook_listener()
+
+
 def main() -> None:
     _load_env()
     port = int(os.getenv("WEBHOOK_PORT", "8080"))

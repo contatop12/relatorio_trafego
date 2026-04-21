@@ -7,9 +7,20 @@ const state = {
   eventStream: null,
 };
 
-const DASHBOARD_BASE =
-  (document.querySelector('meta[name="dashboard-base"]')?.getAttribute("content") || "").replace(/\/+$/, "");
-const apiUrl = (path) => `${DASHBOARD_BASE}${path}`;
+const DASHBOARD_BASE = (() => {
+  const raw = (document.querySelector('meta[name="dashboard-base"]')?.getAttribute("content") || "").trim();
+  if (raw) return raw.replace(/\/+$/, "");
+  const path = window.location.pathname || "/";
+  const m = path.match(/^(\/dash)(?=\/|$)/i);
+  if (m) return m[1];
+  return "";
+})();
+const apiUrl = (path) => {
+  const base = DASHBOARD_BASE;
+  const p = path.startsWith("/") ? path : `/${path}`;
+  if (!base) return p;
+  return `${base.replace(/\/+$/, "")}${p}`;
+};
 
 function dashFetch(input, init) {
   const next = { credentials: "same-origin", ...(init || {}) };
@@ -699,6 +710,46 @@ function updateGroupsCount(n) {
   el.textContent = Number.isFinite(n) ? String(n) : "—";
 }
 
+function applyCatalogListenerUI(listening) {
+  const badge = document.getElementById("catalogListenerBadge");
+  const onBtn = document.getElementById("catalogListenerOnBtn");
+  const offBtn = document.getElementById("catalogListenerOffBtn");
+  if (badge) {
+    badge.dataset.state = listening ? "on" : "off";
+    badge.textContent = listening ? "Escuta ativa" : "Escuta pausada";
+  }
+  if (onBtn) onBtn.disabled = !!listening;
+  if (offBtn) offBtn.disabled = !listening;
+}
+
+async function fetchCatalogListenerState() {
+  const res = await dashFetch(apiUrl("/api/catalog-groups/webhook-listener"));
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return;
+  applyCatalogListenerUI(!!data.listening);
+}
+
+async function setCatalogListenerState(listening) {
+  const res = await dashFetch(apiUrl("/api/catalog-groups/webhook-listener"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ listening }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    setCatalogFeedback(data.error || "Falha ao mudar escuta do webhook.", "error");
+    return;
+  }
+  applyCatalogListenerUI(!!data.listening);
+  setCatalogFeedback(
+    data.listening
+      ? "Escuta ligada: eventos do catálogo voltam a ser processados."
+      : "Escuta pausada: o servidor responde 200 OK à Evolution, mas não grava nem pede nomes.",
+    "success",
+  );
+  setTimeout(() => setCatalogFeedback("", ""), 4000);
+}
+
 function bindTabs() {
   const buttons = Array.from(document.querySelectorAll(".tab-btn"));
   const panels = {
@@ -715,6 +766,7 @@ function bindTabs() {
       panels[btn.dataset.tab]?.classList.add("is-active");
       if (btn.dataset.tab === "groups") {
         fetchCatalogGroups().catch((e) => console.error(e));
+        fetchCatalogListenerState().catch((e) => console.error(e));
       }
     });
   });
@@ -729,7 +781,13 @@ async function fetchCatalogGroups() {
     const res = await dashFetch(apiUrl("/api/catalog-groups"));
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setCatalogFeedback(data.error || "Falha ao carregar grupos.", "error");
+      const parts = [data.error, data.hint].filter(Boolean);
+      if (!parts.length && res.status === 404) {
+        parts.push(
+          "Rota da API nao encontrada. Se a Pulseboard abre em /dash/, defina DASHBOARD_URL_PREFIX=/dash no Easypanel ou actualize o deploy.",
+        );
+      }
+      setCatalogFeedback(parts.join(" — ") || "Falha ao carregar grupos.", "error");
       setGroupsStatus("");
       updateGroupsCount(state.catalogGroups.length);
       return;
@@ -893,6 +951,12 @@ function bindUI() {
   document.getElementById("refreshTemplatesBtn").addEventListener("click", fetchTemplates);
   const rCat = document.getElementById("refreshCatalogGroupsBtn");
   if (rCat) rCat.addEventListener("click", () => fetchCatalogGroups().catch((e) => console.error(e)));
+  document.getElementById("catalogListenerOnBtn")?.addEventListener("click", () =>
+    setCatalogListenerState(true).catch((e) => console.error(e)),
+  );
+  document.getElementById("catalogListenerOffBtn")?.addEventListener("click", () =>
+    setCatalogListenerState(false).catch((e) => console.error(e)),
+  );
   document.getElementById("previewBtn").addEventListener("click", generateTemplatePreview);
   document.getElementById("tplChannel").addEventListener("change", (ev) => renderTemplateVariables(ev.target.value));
   setupChipFields(document.getElementById("newClientForm"), ["lead_exclude_fields", "lead_exclude_contains"]);
