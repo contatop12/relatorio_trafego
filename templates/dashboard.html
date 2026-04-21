@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Manrope:wght@400;500;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;500&family=Manrope:wght@400;500;700;800&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}" />
@@ -300,22 +300,56 @@
       </section>
 
       <section id="tab-groups" class="tab-panel">
-        <section class="panel">
-          <div class="panel-title-wrap">
-            <h2>Catálogo de grupos</h2>
-            <p>
-              Configure na Evolution o webhook <code>POST …/evolution-webhook</code> (porta do webhook ou da
-              dashboard) com o header <code>X-Webhook-Secret</code> igual a
-              <code>EVOLUTION_CATALOG_WEBHOOK_SECRET</code>. Os nomes vêm da API
-              <code>GET /group/findGroupInfos</code>.
-            </p>
+        <article class="groups-hub panel">
+          <header class="groups-hub-head">
+            <div class="groups-hub-titles">
+              <p class="groups-kicker">Evolution · catálogo ao vivo</p>
+              <h2 class="groups-title">Grupos WhatsApp</h2>
+              <p class="groups-lede">
+                JIDs <code>@g.us</code> capturados pelo webhook; nomes completados pela API
+                <code>findGroupInfos</code>.
+              </p>
+            </div>
+            <div class="groups-hub-aside">
+              <div class="groups-stat-card">
+                <span class="groups-stat-label">Grupos em memória</span>
+                <strong id="catalogGroupsCount" class="groups-stat-value">—</strong>
+              </div>
+            </div>
+          </header>
+
+          <details class="groups-guide">
+            <summary class="groups-guide-summary">
+              <span class="groups-guide-icon" aria-hidden="true">⚙</span>
+              Como ligar o webhook na Evolution
+            </summary>
+            <div class="groups-guide-body">
+              <ol>
+                <li>
+                  URL <code>POST …/evolution-webhook</code> na mesma origem que o serviço (ex.: porta
+                  <strong>8080</strong> do webhook ou <strong>8091</strong> da Pulseboard).
+                </li>
+                <li>
+                  Header <code>X-Webhook-Secret</code> ou <code>Authorization: Bearer</code> igual a
+                  <code>EVOLUTION_CATALOG_WEBHOOK_SECRET</code>.
+                </li>
+                <li>Após cada evento útil, a Pulseboard pede o nome do grupo à Evolution.</li>
+              </ol>
+            </div>
+          </details>
+
+          <div class="groups-toolbar">
+            <button type="button" id="refreshCatalogGroupsBtn" class="groups-btn-refresh">
+              <span class="groups-btn-ic" aria-hidden="true">↻</span>
+              Atualizar lista
+            </button>
+            <p id="catalogGroupsStatus" class="groups-status" aria-live="polite"></p>
           </div>
-          <div class="panel-title-wrap list-header">
-            <button type="button" id="refreshCatalogGroupsBtn" class="ghost">Atualizar lista</button>
-          </div>
+
           <div id="catalogGroupsWrap" class="catalog-groups-wrap" aria-live="polite"></div>
-          <p id="catalogGroupsFeedback" class="feedback"></p>
-        </section>
+
+          <div id="catalogGroupsFeedback" class="catalog-feedback" role="status" hidden></div>
+        </article>
       </section>
     </main>
 

@@ -678,6 +678,27 @@ function connectStream() {
   });
 }
 
+function setCatalogFeedback(message, kind) {
+  const el = document.getElementById("catalogGroupsFeedback");
+  if (!el) return;
+  const text = (message || "").trim();
+  el.textContent = text;
+  el.hidden = !text;
+  el.dataset.state = text ? kind || "info" : "";
+}
+
+function setGroupsStatus(message) {
+  const el = document.getElementById("catalogGroupsStatus");
+  if (!el) return;
+  el.textContent = message || "";
+}
+
+function updateGroupsCount(n) {
+  const el = document.getElementById("catalogGroupsCount");
+  if (!el) return;
+  el.textContent = Number.isFinite(n) ? String(n) : "—";
+}
+
 function bindTabs() {
   const buttons = Array.from(document.querySelectorAll(".tab-btn"));
   const panels = {
@@ -700,24 +721,43 @@ function bindTabs() {
 }
 
 async function fetchCatalogGroups() {
-  const fb = document.getElementById("catalogGroupsFeedback");
-  if (fb) fb.textContent = "";
-  const res = await dashFetch(apiUrl("/api/catalog-groups"));
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    if (fb) fb.textContent = data.error || "Falha ao carregar grupos.";
-    return;
+  setCatalogFeedback("", "");
+  setGroupsStatus("A sincronizar…");
+  const btn = document.getElementById("refreshCatalogGroupsBtn");
+  if (btn) btn.disabled = true;
+  try {
+    const res = await dashFetch(apiUrl("/api/catalog-groups"));
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setCatalogFeedback(data.error || "Falha ao carregar grupos.", "error");
+      setGroupsStatus("");
+      updateGroupsCount(state.catalogGroups.length);
+      return;
+    }
+    state.catalogGroups = Array.isArray(data.groups) ? data.groups : [];
+    renderCatalogGroups();
+    const n = state.catalogGroups.length;
+    setGroupsStatus(n ? `Lista actualizada · ${n} ${n === 1 ? "grupo" : "grupos"}` : "Lista vazia — aguardando eventos do webhook.");
+    setCatalogFeedback("", "");
+  } finally {
+    if (btn) btn.disabled = false;
   }
-  state.catalogGroups = Array.isArray(data.groups) ? data.groups : [];
-  renderCatalogGroups();
 }
 
 function renderCatalogGroups() {
   const wrap = document.getElementById("catalogGroupsWrap");
   if (!wrap) return;
   const rows = state.catalogGroups;
+  updateGroupsCount(rows.length);
   if (!rows.length) {
-    wrap.innerHTML = `<p class="catalog-empty">Nenhum grupo catalogado ainda. Envie mensagens no grupo com o webhook ativo.</p>`;
+    wrap.innerHTML = `<div class="catalog-empty-state" role="status">
+      <div class="catalog-empty-orb" aria-hidden="true">◎</div>
+      <h3 class="catalog-empty-title">Sem grupos ainda</h3>
+      <p class="catalog-empty-text">
+        Quando a Evolution enviar eventos de conversas em grupos (<code>@g.us</code>), os JIDs aparecem aqui.
+        Confirme o webhook e o secret na documentação acima.
+      </p>
+    </div>`;
     return;
   }
   const esc = (s) =>
@@ -727,7 +767,7 @@ function renderCatalogGroups() {
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
   const head = `<table class="catalog-table"><thead><tr>
-    <th>Nome</th><th>JID</th><th>Última actividade</th><th>Evento</th><th>Monitorar</th><th></th>
+    <th>Nome</th><th>JID</th><th>Última actividade</th><th>Evento</th><th>Monitorar</th><th>Ações</th>
   </tr></thead><tbody>`;
   const body = rows
     .map((g) => {
@@ -737,12 +777,19 @@ function renderCatalogGroups() {
       const la = esc(g.last_activity_at || "");
       const ev = esc(g.last_event_type || "");
       const mon = !!g.monitoring_enabled;
+      const monLabel = mon ? "Ativo" : "Pausado";
       return `<tr data-group-jid="${jid}">
         <td><input type="text" class="catalog-subject-input" value="${subVal}" data-jid="${jid}" placeholder="Nome do grupo" /></td>
         <td><code class="catalog-jid">${jid}</code></td>
         <td class="catalog-muted">${la ? new Date(la).toLocaleString("pt-BR") : "—"}</td>
         <td class="catalog-muted">${ev || "—"}</td>
-        <td><label class="catalog-toggle"><input type="checkbox" class="catalog-mon" data-jid="${jid}" ${mon ? "checked" : ""} /><span>Activo</span></label></td>
+        <td>
+          <label class="catalog-switch">
+            <input type="checkbox" class="catalog-mon" data-jid="${jid}" ${mon ? "checked" : ""} />
+            <span class="catalog-switch-track" aria-hidden="true"><span class="catalog-switch-thumb"></span></span>
+            <span class="catalog-switch-label">${monLabel}</span>
+          </label>
+        </td>
         <td class="catalog-actions">
           <button type="button" class="small ghost catalog-copy" data-jid="${jid}">Copiar JID</button>
           <button type="button" class="small ghost catalog-refresh" data-jid="${jid}">Nome API</button>
@@ -756,7 +803,14 @@ function renderCatalogGroups() {
   wrap.querySelectorAll(".catalog-copy").forEach((btn) => {
     btn.addEventListener("click", () => {
       const j = btn.getAttribute("data-jid");
-      if (j) navigator.clipboard?.writeText(j).catch(() => {});
+      if (!j) return;
+      navigator.clipboard?.writeText(j).then(
+        () => {
+          setCatalogFeedback("JID copiado para a área de transferência.", "success");
+          setTimeout(() => setCatalogFeedback("", ""), 2000);
+        },
+        () => {},
+      );
     });
   });
   wrap.querySelectorAll(".catalog-refresh").forEach((btn) => {
@@ -771,11 +825,13 @@ function renderCatalogGroups() {
           body: JSON.stringify({ group_jid: j }),
         });
         const data = await res.json().catch(() => ({}));
-        const fb = document.getElementById("catalogGroupsFeedback");
         if (!res.ok) {
-          if (fb) fb.textContent = data.error || "Falha ao atualizar nome.";
-        } else if (fb) {
-          fb.textContent = data.fetched ? "Nome actualizado pela Evolution." : "API não devolveu subject.";
+          setCatalogFeedback(data.error || "Falha ao atualizar nome.", "error");
+        } else {
+          setCatalogFeedback(
+            data.fetched ? "Nome actualizado pela Evolution." : "API não devolveu subject.",
+            data.fetched ? "success" : "info",
+          );
         }
         await fetchCatalogGroups();
       } finally {
@@ -787,6 +843,7 @@ function renderCatalogGroups() {
     cb.addEventListener("change", async () => {
       const j = cb.getAttribute("data-jid");
       if (!j) return;
+      const label = cb.closest(".catalog-switch")?.querySelector(".catalog-switch-label");
       const res = await dashFetch(apiUrl("/api/catalog-groups"), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -794,8 +851,12 @@ function renderCatalogGroups() {
       });
       if (!res.ok) {
         cb.checked = !cb.checked;
-        const fb = document.getElementById("catalogGroupsFeedback");
-        if (fb) fb.textContent = "Falha ao guardar monitoramento.";
+        if (label) label.textContent = cb.checked ? "Ativo" : "Pausado";
+        setCatalogFeedback("Falha ao guardar monitoramento.", "error");
+      } else if (label) {
+        label.textContent = cb.checked ? "Ativo" : "Pausado";
+        setCatalogFeedback("Monitoramento actualizado.", "success");
+        setTimeout(() => setCatalogFeedback("", ""), 2200);
       }
     });
   });
@@ -811,9 +872,12 @@ function renderCatalogGroups() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ group_jid: j, subject }),
       });
-      const fb = document.getElementById("catalogGroupsFeedback");
-      if (fb) fb.textContent = res.ok ? "Nome guardado." : "Falha ao guardar nome.";
-      if (res.ok) await fetchCatalogGroups();
+      if (res.ok) {
+        setCatalogFeedback("Nome guardado.", "success");
+        await fetchCatalogGroups();
+      } else {
+        setCatalogFeedback("Falha ao guardar nome.", "error");
+      }
     });
   });
 }
