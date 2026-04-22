@@ -189,6 +189,8 @@ async function fetchMetaCatalogs() {
 function bindFiltersHelpModal() {
   const dlg = document.getElementById("filtersHelpDialog");
   if (!dlg) return;
+  if (dlg.dataset.filtersHelpBound === "1") return;
+  dlg.dataset.filtersHelpBound = "1";
   let lastFocus = null;
 
   const trapFocus = (ev) => {
@@ -219,6 +221,7 @@ function bindFiltersHelpModal() {
   };
 
   function open() {
+    if (!dlg.hidden) return;
     lastFocus = document.activeElement;
     dlg.hidden = false;
     dlg.setAttribute("aria-hidden", "false");
@@ -234,9 +237,14 @@ function bindFiltersHelpModal() {
     if (lastFocus && typeof lastFocus.focus === "function") lastFocus.focus();
   }
 
-  document.querySelectorAll('[data-open="filters-help"]').forEach((btn) => {
-    btn.addEventListener("click", () => open());
+  /* Delegação: botões "?" vivem também em cards clonados do template (não existem no DOM no primeiro bindUI). */
+  document.addEventListener("click", (ev) => {
+    const opener = ev.target.closest?.('[data-open="filters-help"]');
+    if (!opener) return;
+    ev.preventDefault();
+    open();
   });
+
   dlg.querySelectorAll("[data-filters-help-dismiss]").forEach((el) => {
     el.addEventListener("click", (ev) => {
       if (ev.target === el) close();
