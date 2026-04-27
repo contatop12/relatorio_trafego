@@ -21,6 +21,7 @@ DEFAULT_TEMPLATES: Dict[str, Dict[str, Dict[str, str]]] = {
             "description": "Mensagem padrão de novo lead para WhatsApp.",
             "content": (
                 "Novo lead - {{client_name}}\n"
+                "Recebido em: {{chegada_em}}\n"
                 "Nome do Lead: {{nome}}\n"
                 "WhatsApp do Lead: {{whatsapp}}\n"
                 "E-mail do Lead: {{email}}\n\n"
@@ -34,6 +35,7 @@ DEFAULT_TEMPLATES: Dict[str, Dict[str, Dict[str, str]]] = {
             "description": "Formato detalhado usado para Pratical Life.",
             "content": (
                 "Novo lead recebido - {{client_name}}\n"
+                "- Recebido em: {{chegada_em}}\n"
                 "Contato:\n"
                 "- Nome: {{nome}}\n"
                 "- WhatsApp: {{whatsapp}}\n"
@@ -48,6 +50,7 @@ DEFAULT_TEMPLATES: Dict[str, Dict[str, Dict[str, str]]] = {
             "description": "Template legado para Lorena (usa conteúdo padrão).",
             "content": (
                 "Novo lead - {{client_name}}\n"
+                "Recebido em: {{chegada_em}}\n"
                 "Nome do Lead: {{nome}}\n"
                 "WhatsApp do Lead: {{whatsapp}}\n"
                 "E-mail do Lead: {{email}}\n\n"
@@ -92,7 +95,8 @@ TEMPLATE_VARIABLES: Dict[str, Dict[str, str]] = {
         "respostas_count": "Quantidade de respostas enviadas",
         "respostas_raw_count": "Quantidade de respostas brutas",
         "respostas_omitidas_count": "Quantidade de respostas removidas",
-        "received_at": "Data/hora de recebimento do webhook",
+        "received_at": "Data/hora de recebimento do webhook (alias técnico)",
+        "chegada_em": "Data/hora em que o lead chegou ao servidor (mesmo instante que received_at)",
     },
     "google_report": {
         "client_name": "Nome do cliente",

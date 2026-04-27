@@ -847,6 +847,7 @@ async function generateTemplatePreview() {
     respostas_raw_count: "4",
     respostas_omitidas_count: "2",
     received_at: "20/04/2026 11:42:00",
+    chegada_em: "20/04/2026 11:42:00",
     customer_id: "253-906-3374",
     period_start_br: "01/04/2026",
     period_end_br: "07/04/2026",

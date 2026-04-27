@@ -80,6 +80,31 @@ _WHATSAPP_MSG_MAX = 4000
 _META_GRAPH_BASE_URL = "https://graph.facebook.com/v18.0"
 _FORM_NAME_CACHE: Dict[str, str] = {}
 
+# Chaves em body/data/mappable para nome do formulário (Make, Meta, instant forms).
+_FORM_NAME_PAYLOAD_KEYS: Tuple[str, ...] = (
+    "form_name",
+    "formName",
+    "formulario",
+    "formulário",
+    "nome_formulario",
+    "nome_form",
+    "form_title",
+    "formTitle",
+    "form_label",
+    "formLabel",
+    "nome_do_formulario",
+    "nome_do_formulário",
+    "titulo_formulario",
+    "titulo_formulário",
+    "titulo_do_formulario",
+    "titulo_do_formulário",
+    "leadgen_form_name",
+    "leadgenFormName",
+    "form_name_display",
+    "nome_formulario_meta",
+    "instant_form_name",
+)
+
 
 def _emoji_for_log(message: str) -> str:
     text = message.upper()
@@ -719,6 +744,7 @@ def _base_message_fields(body: Dict[str, Any], route: Optional[Dict[str, Any]] =
         client_rules=client_rules,
     )
 
+    received_ts = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     return {
         "nome": nome or "(nao informado)",
         "email": email or "(nao informado)",
@@ -732,47 +758,135 @@ def _base_message_fields(body: Dict[str, Any], route: Optional[Dict[str, Any]] =
         "respostas_count": str(respostas_bundle["filtered_count"]),
         "respostas_raw_count": str(respostas_bundle["raw_count"]),
         "respostas_omitidas_count": str(respostas_bundle["omitted_count"]),
-        "received_at": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+        "received_at": received_ts,
+        "chegada_em": received_ts,
     }
+
+
+def _form_name_from_nested_objects(body: Dict[str, Any], data: Dict[str, Any]) -> str:
+    """Objetos aninhados comuns no Make: `form`, `lead.form`, etc."""
+    for container in (body, data):
+        if not isinstance(container, dict):
+            continue
+        form_obj = container.get("form")
+        if isinstance(form_obj, dict):
+            n = _first_non_empty(form_obj.get("name"), form_obj.get("title"), form_obj.get("label"))
+            if n:
+                return n
+        lead = container.get("lead")
+        if isinstance(lead, dict):
+            lf = lead.get("form")
+            if isinstance(lf, dict):
+                n = _first_non_empty(lf.get("name"), lf.get("title"), lf.get("label"))
+                if n:
+                    return n
+    return ""
+
+
+def _form_name_from_flat_and_mappable(
+    data: Dict[str, Any],
+    body: Dict[str, Any],
+    mappable: List[Dict[str, Any]],
+) -> str:
+    for key in _FORM_NAME_PAYLOAD_KEYS:
+        v = _first_non_empty(
+            data.get(key),
+            body.get(key),
+            _mappable_lookup(mappable, key),
+        )
+        if v:
+            return v
+    return ""
+
+
+# Nomes de linha em mappable_field_data que costumam ser metadado do formulário (não resposta do usuário).
+_FORM_NAME_MAPPABLE_ROW_ALIASES_CF = frozenset(
+    {
+        "form_name",
+        "formname",
+        "nome_formulario",
+        "nome_form",
+        "nome_do_formulario",
+        "nome_do_formulário",
+        "form_title",
+        "formtitle",
+        "form_label",
+        "formlabel",
+        "titulo_formulario",
+        "titulo_formulário",
+        "leadgen_form_name",
+        "leadgenformname",
+        "nome do formulario",
+        "nome do formulário",
+        "nome do formulario no meta",
+        "nome do formulário no meta",
+    }
+)
+
+
+def _mappable_form_name_by_row_alias(mappable: List[Dict[str, Any]]) -> str:
+    for row in mappable:
+        if not isinstance(row, dict):
+            continue
+        name_raw = str(row.get("name", "")).strip()
+        if not name_raw:
+            continue
+        name_cf = _normalize_field_name(name_raw)
+        if name_cf in _FORM_NAME_MAPPABLE_ROW_ALIASES_CF:
+            val = _format_field_value(row.get("value"))
+            if val:
+                return val
+    return ""
 
 
 def _extract_form_name(body: Dict[str, Any]) -> str:
     data = body.get("data") if isinstance(body.get("data"), dict) else {}
     mappable = _ensure_mappable(body, data)
-    name_from_payload = _first_non_empty(
-        data.get("form_name"),
-        data.get("formName"),
-        data.get("formulario"),
-        data.get("formulário"),
-        data.get("nome_formulario"),
-        data.get("nome_form"),
-        body.get("form_name"),
-        body.get("formName"),
-        body.get("formulario"),
-        body.get("formulário"),
-        body.get("nome_formulario"),
-        body.get("nome_form"),
-        _mappable_lookup(mappable, "form_name"),
-        _mappable_lookup(mappable, "formName"),
-        _mappable_lookup(mappable, "formulario"),
-        _mappable_lookup(mappable, "formulário"),
-        _mappable_lookup(mappable, "nome_formulario"),
-        _mappable_lookup(mappable, "nome_form"),
-    )
+
+    name_from_nested = _form_name_from_nested_objects(body, data)
+    if name_from_nested:
+        return name_from_nested
+
+    name_from_payload = _form_name_from_flat_and_mappable(data, body, mappable)
     if name_from_payload:
         return name_from_payload
 
+    name_from_mappable_alias = _mappable_form_name_by_row_alias(mappable)
+    if name_from_mappable_alias:
+        return name_from_mappable_alias
+
     # Fallback robusto: resolve nome do formulário na Graph API via form_id/leadgenId.
+    nested_form_id = ""
+    nested_leadgen_id = ""
+    for container in (body, data):
+        if not isinstance(container, dict):
+            continue
+        lead = container.get("lead")
+        if isinstance(lead, dict):
+            nested_form_id = nested_form_id or _first_non_empty(
+                lead.get("form_id"),
+                lead.get("formId"),
+            )
+            nested_leadgen_id = nested_leadgen_id or _first_non_empty(
+                lead.get("leadgen_id"),
+                lead.get("leadgenId"),
+                lead.get("id"),
+            )
+
     form_id = _first_non_empty(
         body.get("form_id"),
         body.get("formId"),
         body.get("leadgen_form_id"),
+        body.get("leadgenFormId"),
         data.get("form_id"),
         data.get("formId"),
         data.get("leadgen_form_id"),
+        data.get("leadgenFormId"),
+        nested_form_id,
         _mappable_lookup(mappable, "form_id"),
         _mappable_lookup(mappable, "formId"),
         _mappable_lookup(mappable, "leadgen_form_id"),
+        _mappable_lookup(mappable, "leadgenFormId"),
     )
     if form_id:
         if form_id in _FORM_NAME_CACHE:
@@ -783,7 +897,17 @@ def _extract_form_name(body: Dict[str, Any]) -> str:
             _FORM_NAME_CACHE[form_id] = form_name
             return form_name
 
-    leadgen_id = _first_non_empty(body.get("leadgenId"), body.get("leadgen_id"), data.get("leadgenId"), data.get("leadgen_id"))
+    leadgen_id = _first_non_empty(
+        body.get("leadgenId"),
+        body.get("leadgen_id"),
+        body.get("leadgenID"),
+        data.get("leadgenId"),
+        data.get("leadgen_id"),
+        data.get("leadgenID"),
+        nested_leadgen_id,
+        _mappable_lookup(mappable, "leadgenId"),
+        _mappable_lookup(mappable, "leadgen_id"),
+    )
     if leadgen_id:
         lead_obj = _graph_get_object_fields(leadgen_id, "form_id")
         lead_form_id = _first_non_empty(lead_obj.get("form_id"))
@@ -816,6 +940,7 @@ def _format_default_lead_message(body: Dict[str, Any], client_name: str, route: 
     base = _base_message_fields(body, route=route)
     msg = (
         f"Novo lead - {client_name}\n"
+        f"Recebido em: {base['chegada_em']}\n"
         f"Nome do Lead: {base['nome']}\n"
         f"WhatsApp do Lead: {base['whatsapp']}\n"
         f"E-mail do Lead: {base['email']}\n"
@@ -836,6 +961,7 @@ def _format_pratical_life_lead_message(
     base = _base_message_fields(body, route=route)
     msg = (
         f"Novo lead recebido - {client_name}\n"
+        f"- Recebido em: {base['chegada_em']}\n"
         f"Contato:\n"
         f"- Nome: {base['nome']}\n"
         f"- WhatsApp: {base['whatsapp']}\n"
@@ -884,6 +1010,7 @@ def _format_lead_message(
                 "respostas_raw_count": base["respostas_raw_count"],
                 "respostas_omitidas_count": base["respostas_omitidas_count"],
                 "received_at": base["received_at"],
+                "chegada_em": base["chegada_em"],
             },
         )
         return _truncate_message(rendered)
