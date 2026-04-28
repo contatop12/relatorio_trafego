@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;500&family=Manrope:wght@400;500;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;500&family=Lexend:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}" />
@@ -67,14 +67,14 @@
               <label>
                 Meta page id
                 <select name="meta_page_id" class="field-select meta-catalog-page-select">
-                  <option value="">(Opcional) — escolher página —</option>
+                  <option value="">Nenhum</option>
                 </select>
                 <span class="field-hint">Páginas do Business (API) + páginas já cadastradas.</span>
               </label>
               <label>
                 Grupo leads
                 <select name="lead_group_id" class="field-select catalog-group-select" data-catalog-optional="1">
-                  <option value="">(Opcional) sem grupo lead</option>
+                  <option value="">Nenhum</option>
                 </select>
                 <span class="field-hint">Mesmo catálogo; vazio usa o grupo relatório como fallback no fluxo.</span>
               </label>
@@ -86,7 +86,7 @@
               <label>
                 Grupo P12 relatório
                 <select name="p12_report_group_id" class="field-select catalog-group-select" data-catalog-optional="1">
-                  <option value="">(Opcional) sem grupo P12</option>
+                  <option value="">Nenhum</option>
                 </select>
                 <span class="field-hint">Relatório semanal Meta (resumo + dados) para a equipe P12.</span>
               </label>
@@ -100,13 +100,13 @@
               <label>
                 Template relatório de dados
                 <select name="p12_data_report_template" class="field-select meta-report-data-template-select">
-                  <option value="">— Opcional — segunda mensagem ao grupo P12</option>
+                  <option value="">Nenhum</option>
                 </select>
               </label>
               <label>
                 Grupo mensagem interna
                 <select name="internal_notify_group_id" class="field-select catalog-group-select" data-catalog-optional="1">
-                  <option value="">(Opcional) sem cópia interna</option>
+                  <option value="">Nenhum</option>
                 </select>
                 <span class="field-hint">Cópia opcional; o texto vem dos templates do canal <code>internal_lead</code> / <code>internal_report</code>.</span>
               </label>
@@ -116,7 +116,7 @@
                   name="internal_lead_template"
                   class="field-select internal-lead-template-select"
                 >
-                  <option value="">— Opcional —</option>
+                  <option value="">Nenhum</option>
                 </select>
                 <span class="field-hint">Aba Templates, canal <code>internal_lead</code> (mesmas variáveis do lead).</span>
               </label>
@@ -126,7 +126,7 @@
                   name="internal_weekly_template"
                   class="field-select internal-weekly-template-select"
                 >
-                  <option value="">— Opcional —</option>
+                  <option value="">Nenhum</option>
                 </select>
                 <span class="field-hint">Aba Templates, canal <code>internal_report</code> (após envio P12 Meta).</span>
               </label>
@@ -264,7 +264,7 @@
               <label>
                 Grupo P12 relatório
                 <select name="p12_report_group_id" class="field-select catalog-group-select" data-catalog-optional="1">
-                  <option value="">(Opcional)</option>
+                  <option value="">Nenhum</option>
                 </select>
               </label>
               <label>
@@ -277,14 +277,14 @@
               <label>
                 Template relatório de dados
                 <select name="p12_data_report_template" class="field-select google-p12-data-template-select">
-                  <option value="">— Opcional —</option>
+                  <option value="">Nenhum</option>
                 </select>
                 <span class="field-hint">Segunda mensagem ao P12 — ex.: p12_dados</span>
               </label>
               <label>
                 Grupo mensagem interna
                 <select name="internal_notify_group_id" class="field-select catalog-group-select" data-catalog-optional="1">
-                  <option value="">(Opcional)</option>
+                  <option value="">Nenhum</option>
                 </select>
                 <span class="field-hint">Aviso após envio do relatório; conteúdo no template <code>internal_report</code>.</span>
               </label>
@@ -294,7 +294,7 @@
                   name="internal_weekly_template"
                   class="field-select internal-weekly-template-select"
                 >
-                  <option value="">— Opcional —</option>
+                  <option value="">Nenhum</option>
                 </select>
                 <span class="field-hint">Canal <code>internal_report</code> — variáveis Google (ver aba Templates).</span>
               </label>
@@ -675,13 +675,13 @@
               <label class="edit-field">
                 Meta page id
                 <select name="meta_page_id" class="field-select meta-catalog-page-select">
-                  <option value="">(Opcional) — escolher página —</option>
+                  <option value="">Nenhum</option>
                 </select>
               </label>
               <label class="edit-field">
                 Grupo lead
                 <select name="lead_group_id" class="field-select catalog-group-select" data-catalog-optional="1">
-                  <option value="">(Opcional) sem grupo lead</option>
+                  <option value="">Nenhum</option>
                 </select>
               </label>
               <label class="edit-field">
@@ -691,7 +691,7 @@
               <label class="edit-field">
                 Grupo P12 relatório
                 <select name="p12_report_group_id" class="field-select catalog-group-select" data-catalog-optional="1">
-                  <option value="">(Opcional)</option>
+                  <option value="">Nenhum</option>
                 </select>
               </label>
               <label class="edit-field">
@@ -701,13 +701,13 @@
               <label class="edit-field">
                 Template relatório de dados
                 <select name="p12_data_report_template" class="field-select meta-report-data-template-select">
-                  <option value="">— Opcional —</option>
+                  <option value="">Nenhum</option>
                 </select>
               </label>
               <label class="edit-field">
                 Grupo mensagem interna
                 <select name="internal_notify_group_id" class="field-select catalog-group-select" data-catalog-optional="1">
-                  <option value="">(Opcional)</option>
+                  <option value="">Nenhum</option>
                 </select>
               </label>
               <label class="edit-field">
@@ -716,7 +716,7 @@
                   name="internal_lead_template"
                   class="field-select internal-lead-template-select"
                 >
-                  <option value="">— Opcional —</option>
+                  <option value="">Nenhum</option>
                 </select>
               </label>
               <label class="edit-field">
@@ -725,7 +725,7 @@
                   name="internal_weekly_template"
                   class="field-select internal-weekly-template-select"
                 >
-                  <option value="">— Opcional —</option>
+                  <option value="">Nenhum</option>
                 </select>
               </label>
               <label class="edit-field edit-field--full">
@@ -871,7 +871,7 @@
             <label>
               Grupo P12 relatório
               <select name="p12_report_group_id" class="field-select catalog-group-select" data-catalog-optional="1">
-                <option value="">(Opcional)</option>
+                <option value="">Nenhum</option>
               </select>
             </label>
             <label>
@@ -881,13 +881,13 @@
             <label>
               Template relatório de dados
               <select name="p12_data_report_template" class="field-select google-p12-data-template-select">
-                <option value="">— Opcional —</option>
+                <option value="">Nenhum</option>
               </select>
             </label>
             <label>
               Grupo mensagem interna
               <select name="internal_notify_group_id" class="field-select catalog-group-select" data-catalog-optional="1">
-                <option value="">(Opcional)</option>
+                <option value="">Nenhum</option>
               </select>
             </label>
             <label>
@@ -896,7 +896,7 @@
                 name="internal_weekly_template"
                 class="field-select internal-weekly-template-select"
               >
-                <option value="">— Opcional —</option>
+                <option value="">Nenhum</option>
               </select>
             </label>
             <label>

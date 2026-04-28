@@ -150,7 +150,7 @@ function syncMetaCatalogSelects() {
       const cl = state.metaClients.find((x) => String(x.id) === String(card.dataset.clientId));
       if (cl?.meta_page_id) preferred = String(cl.meta_page_id).trim();
     }
-    fillMetaSelect(sel, pageItems, preferred, "(Opcional) — escolher página —");
+    fillMetaSelect(sel, pageItems, preferred, "Nenhum");
   });
 }
 
@@ -338,7 +338,7 @@ function populateChannelTemplateSelect(selectEl, channel, builtinIds, currentVal
   if (allowEmpty) {
     const o = document.createElement("option");
     o.value = "";
-    o.textContent = "— Opcional —";
+    o.textContent = "Nenhum";
     selectEl.appendChild(o);
   }
   const mkOptgroup = (label) => {
@@ -1374,7 +1374,7 @@ function syncCatalogGroupSelects() {
     sel.replaceChildren();
     const ph = document.createElement("option");
     ph.value = "";
-    ph.textContent = optional ? "(Opcional) sem grupo lead" : "— Escolher do catálogo —";
+    ph.textContent = optional ? "Nenhum" : "— Escolher do catálogo —";
     sel.appendChild(ph);
     optionsSource.forEach((g) => {
       const jid = (g.group_jid || "").trim();
