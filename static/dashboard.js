@@ -1243,7 +1243,7 @@ function renderSiteLeadRoutes() {
       return `<article class="client-card site-client-card" data-route-id="${id}">
         <div class="client-main">
           <div class="client-head">
-            <h3 class="client-name"><code>${formId}</code></h3>
+            <h3 class="client-name">${targetClient || "(sem cliente)"}</h3>
             <div class="head-actions">
               <span class="status-pill ${statusClass}">${statusLabel}</span>
               <button
@@ -1258,8 +1258,8 @@ function renderSiteLeadRoutes() {
             </div>
           </div>
           <dl class="meta-grid">
+            <div><dt>CODI ID</dt><dd><code>${formId}</code></dd></div>
             <div><dt>Tipo</dt><dd>${targetType}</dd></div>
-            <div><dt>Cliente</dt><dd>${targetClient || "—"}</dd></div>
             <div><dt>Template site</dt><dd>${leadTemplate}</dd></div>
             <div><dt>Template interno</dt><dd>${internalLeadTemplate || "Nenhum"}</dd></div>
             <div><dt>Observações</dt><dd>${notes || "—"}</dd></div>
