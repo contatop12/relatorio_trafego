@@ -523,6 +523,47 @@ def _build_google_report_message(
     )
 
 
+def _send_google_p12_and_internal(
+    evolution: Any,
+    *,
+    client: Dict[str, Any],
+    client_name: str,
+    customer_id: str,
+    period_start: str,
+    period_end: str,
+    metrics: Dict[str, Any],
+) -> None:
+    """Envios opcionais ao grupo P12 e aviso interno após relatório ao cliente."""
+    p12_gid = str(client.get("p12_report_group_id", "")).strip()
+    t1 = str(client.get("p12_report_template", "default")).strip() or "default"
+    t2 = str(client.get("p12_data_report_template", "")).strip()
+    if p12_gid:
+        msg_a = _build_google_report_message(
+            client_name, customer_id, period_start, period_end, metrics, template_id=t1
+        )
+        if msg_a.strip() and not evolution.send_text_message(p12_gid, msg_a):
+            logger.warning("Falha no envio P12 (1) Google | cliente=%s", client_name)
+        if t2:
+            msg_b = _build_google_report_message(
+                client_name, customer_id, period_start, period_end, metrics, template_id=t2
+            )
+            if msg_b.strip() and not evolution.send_text_message(p12_gid, msg_b):
+                logger.warning("Falha no envio P12 (2) Google | cliente=%s", client_name)
+    int_gid = str(client.get("internal_notify_group_id", "")).strip()
+    int_msg = str(client.get("internal_notify_message", "")).strip()
+    if int_gid and int_msg:
+        ctx = {
+            "client_name": client_name,
+            "customer_id": _normalize_customer_id(customer_id),
+            "period_start_br": _date_iso_to_br(period_start),
+            "period_end_br": _date_iso_to_br(period_end),
+            "period_label": f"{_date_iso_to_br(period_start)} a {_date_iso_to_br(period_end)}",
+        }
+        body = render_template_text(int_msg, ctx)
+        if body.strip() and not evolution.send_text_message(int_gid, body):
+            logger.warning("Falha no envio interno Google | cliente=%s", client_name)
+
+
 def run_google_reports(*, force_send_zero: bool = False, only_customer_id: Optional[str] = None) -> bool:
     clients = _load_google_clients()
     enabled = [c for c in clients if c.get("enabled", True)]
@@ -594,15 +635,41 @@ def run_google_reports(*, force_send_zero: bool = False, only_customer_id: Optio
             report_path = os.path.join(log_dir, f"google_report_{file_name}.md")
             with open(report_path, "w", encoding="utf-8") as f:
                 f.write(message + "\n")
+                if str(client.get("p12_report_group_id", "")).strip():
+                    f.write("\n--- P12 preview ---\n")
+                    t1 = str(client.get("p12_report_template", "default")).strip() or "default"
+                    t2 = str(client.get("p12_data_report_template", "")).strip()
+                    f.write(
+                        _build_google_report_message(
+                            client_name, customer_id, period_start, period_end, metrics, template_id=t1
+                        )
+                        + "\n"
+                    )
+                    if t2:
+                        f.write(
+                            _build_google_report_message(
+                                client_name, customer_id, period_start, period_end, metrics, template_id=t2
+                            )
+                            + "\n"
+                        )
             logger.info("DRY_RUN ativo: relatorio salvo em %s", report_path)
             success_count += 1
             continue
 
-        if evolution.send_text_message(group_id, message):
-            logger.info("Relatorio Google enviado para %s (%s).", client_name, group_id)
-            success_count += 1
-        else:
+        if not evolution.send_text_message(group_id, message):
             logger.error("Falha ao enviar relatorio Google para %s.", client_name)
+            continue
+        logger.info("Relatorio Google enviado para %s (%s).", client_name, group_id)
+        _send_google_p12_and_internal(
+            evolution,
+            client=client,
+            client_name=client_name,
+            customer_id=customer_id,
+            period_start=period_start,
+            period_end=period_end,
+            metrics=metrics,
+        )
+        success_count += 1
 
     return success_count > 0
 

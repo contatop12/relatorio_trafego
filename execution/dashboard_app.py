@@ -200,6 +200,10 @@ def _validate_client(client: Dict[str, Any]) -> Dict[str, Any]:
     ad_ok = bool(re.fullmatch(r"act_\d{6,}", ad_account_id))
     group_ok = bool(re.fullmatch(r"\d+@g\.us", group_id))
     lead_group_ok = (not lead_group_id) or bool(re.fullmatch(r"\d+@g\.us", lead_group_id))
+    p12_g = str(client.get("p12_report_group_id", "")).strip()
+    p12_ok = (not p12_g) or bool(re.fullmatch(r"\d+@g\.us", p12_g))
+    int_g = str(client.get("internal_notify_group_id", "")).strip()
+    int_ok = (not int_g) or bool(re.fullmatch(r"\d+@g\.us", int_g))
     page_ok = (not page_id) or page_id.isdigit()
     ready_for_report = enabled and ad_ok and group_ok
     ready_for_lead_route = enabled and bool(page_id) and lead_group_ok
@@ -217,6 +221,8 @@ def _validate_client(client: Dict[str, Any]) -> Dict[str, Any]:
         "ad_account_ok": ad_ok,
         "group_id_ok": group_ok,
         "lead_group_id_ok": lead_group_ok,
+        "p12_report_group_id_ok": p12_ok,
+        "internal_notify_group_id_ok": int_ok,
         "meta_page_id_ok": page_ok,
         "ready_for_report": ready_for_report,
         "ready_for_lead_route": ready_for_lead_route,
@@ -237,6 +243,10 @@ def _validate_google_client(client: Dict[str, Any]) -> Dict[str, Any]:
     enabled = bool(client.get("enabled", True))
     cid_ok = bool(re.fullmatch(r"\d{3}-\d{3}-\d{4}", customer_id))
     group_ok = bool(re.fullmatch(r"\d+@g\.us", group_id))
+    p12_g = str(client.get("p12_report_group_id", "")).strip()
+    p12_ok = (not p12_g) or bool(re.fullmatch(r"\d+@g\.us", p12_g))
+    int_g = str(client.get("internal_notify_group_id", "")).strip()
+    int_ok = (not int_g) or bool(re.fullmatch(r"\d+@g\.us", int_g))
     if not enabled:
         status = "Pausado"
     elif cid_ok and group_ok:
@@ -248,6 +258,8 @@ def _validate_google_client(client: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "customer_id_ok": cid_ok,
         "group_id_ok": group_ok,
+        "p12_report_group_id_ok": p12_ok,
+        "internal_notify_group_id_ok": int_ok,
         "status_label": status,
     }
 
@@ -266,6 +278,12 @@ def _public_google_client_payload(raw: Dict[str, Any]) -> Dict[str, Any]:
         "notes": str(raw.get("notes", "")).strip(),
         "google_template": str(raw.get("google_template", "default")).strip() or "default",
         "primary_conversions": [str(x).strip() for x in primary if str(x).strip()],
+        "lead_phone_number": str(raw.get("lead_phone_number", "")).strip(),
+        "p12_report_group_id": str(raw.get("p12_report_group_id", "")).strip(),
+        "p12_report_template": str(raw.get("p12_report_template", "")).strip(),
+        "p12_data_report_template": str(raw.get("p12_data_report_template", "")).strip(),
+        "internal_notify_group_id": str(raw.get("internal_notify_group_id", "")).strip(),
+        "internal_notify_message": str(raw.get("internal_notify_message", "")).strip(),
     }
     client["checks"] = _validate_google_client(client)
     return client
@@ -296,6 +314,11 @@ def _public_client_payload(raw: Dict[str, Any], events_map: Dict[str, List[Dict[
         "lead_exclude_contains": _csv_list(raw.get("lead_exclude_contains")),
         "lead_exclude_regex": _csv_list(raw.get("lead_exclude_regex")),
         "enabled": bool(raw.get("enabled", True)),
+        "p12_report_group_id": str(raw.get("p12_report_group_id", "")).strip(),
+        "p12_report_template": str(raw.get("p12_report_template", "")).strip(),
+        "p12_data_report_template": str(raw.get("p12_data_report_template", "")).strip(),
+        "internal_notify_group_id": str(raw.get("internal_notify_group_id", "")).strip(),
+        "internal_notify_message": str(raw.get("internal_notify_message", "")).strip(),
     }
     checks = _validate_client(client)
     client_events = events_map.get(client["client_name"], [])
@@ -841,6 +864,11 @@ def api_add_client() -> Any:
         "lead_exclude_contains": lead_exclude_contains,
         "lead_exclude_regex": lead_exclude_regex,
         "enabled": enabled,
+        "p12_report_group_id": str(payload.get("p12_report_group_id", "")).strip(),
+        "p12_report_template": str(payload.get("p12_report_template", "")).strip(),
+        "p12_data_report_template": str(payload.get("p12_data_report_template", "")).strip(),
+        "internal_notify_group_id": str(payload.get("internal_notify_group_id", "")).strip(),
+        "internal_notify_message": str(payload.get("internal_notify_message", "")).strip(),
     }
     if persistence.db_enabled():
         persistence.ensure_db_ready()
@@ -896,6 +924,11 @@ def api_update_client(client_id: int) -> Any:
         "lead_exclude_contains",
         "lead_exclude_regex",
         "enabled",
+        "p12_report_group_id",
+        "p12_report_template",
+        "p12_data_report_template",
+        "internal_notify_group_id",
+        "internal_notify_message",
     }
     for key in updatable_fields:
         if key not in payload:
@@ -969,6 +1002,12 @@ def api_add_google_client() -> Any:
         "primary_conversions": primary_conversions,
         "notes": notes,
         "google_template": google_template,
+        "lead_phone_number": str(payload.get("lead_phone_number", "")).strip(),
+        "p12_report_group_id": str(payload.get("p12_report_group_id", "")).strip(),
+        "p12_report_template": str(payload.get("p12_report_template", "")).strip(),
+        "p12_data_report_template": str(payload.get("p12_data_report_template", "")).strip(),
+        "internal_notify_group_id": str(payload.get("internal_notify_group_id", "")).strip(),
+        "internal_notify_message": str(payload.get("internal_notify_message", "")).strip(),
     }
     if persistence.db_enabled():
         persistence.ensure_db_ready()
@@ -1019,6 +1058,12 @@ def api_update_google_client(client_id: int) -> Any:
         "notes",
         "google_template",
         "primary_conversions",
+        "lead_phone_number",
+        "p12_report_group_id",
+        "p12_report_template",
+        "p12_data_report_template",
+        "internal_notify_group_id",
+        "internal_notify_message",
     }
     for key in updatable:
         if key not in payload:

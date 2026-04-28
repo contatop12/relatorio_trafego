@@ -106,9 +106,11 @@ def main() -> None:
 
     reporter = P12RelatoriosReporter()
     ok = reporter.generate_and_send_report_for_client(
-        client_name,
-        ad_account_id,
-        group_id,
+        {
+            "client_name": client_name,
+            "ad_account_id": ad_account_id,
+            "group_id": group_id,
+        },
         send_if_zero_spend=True,
     )
     if not ok:

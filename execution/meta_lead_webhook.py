@@ -668,6 +668,8 @@ def _resolve_lead_route(page_id: str) -> Optional[Dict[str, Any]]:
             "exclude_exact": _csv_to_list(c.get("lead_exclude_fields")),
             "exclude_contains": _csv_to_list(c.get("lead_exclude_contains")),
             "exclude_regex": _csv_to_list(c.get("lead_exclude_regex")),
+            "internal_notify_group_id": str(c.get("internal_notify_group_id", "")).strip(),
+            "internal_notify_message": str(c.get("internal_notify_message", "")).strip(),
         }
     return None
 
@@ -692,6 +694,8 @@ def _resolve_legacy_lorena_route() -> Optional[Dict[str, Any]]:
             "exclude_exact": [],
             "exclude_contains": [],
             "exclude_regex": [],
+            "internal_notify_group_id": str(c.get("internal_notify_group_id", "")).strip(),
+            "internal_notify_message": str(c.get("internal_notify_message", "")).strip(),
         }
     return None
 
@@ -1233,23 +1237,7 @@ def _handle_meta_new_lead(endpoint_label: str, allow_legacy_lorena_fallback: boo
                 continue
 
             client = get_evolution_client()
-            if client.send_text_message(group_id, message):
-                _wh_log(
-                    f"LEAD_{idx} | OK_WHATSAPP | canal=leads_meta | cod=MENSAGEM_ENVIADA_EVOLUTION | "
-                    f"cliente={route['client_name']} | page_id={page_id} | group_id={group_id} | "
-                    f"evolution_instance={_evolution_instance_label()}"
-                )
-                sent += 1
-                _emit_runtime_event(
-                    stage="WHATSAPP_ENVIADO_OK",
-                    status="ok",
-                    detail="Mensagem enviada ao grupo",
-                    client_name=route["client_name"],
-                    page_id=page_id,
-                    group_id=group_id,
-                    payload={"lead_index": idx},
-                )
-            else:
+            if not client.send_text_message(group_id, message):
                 errors.append(f"lead_index_{idx}: send returned false")
                 _wh_log(
                     f"LEAD_{idx} | ERRO_WHATSAPP | canal=leads_meta | cod=EVOLUTION_SEND_TEXT_FALHOU | "
@@ -1267,6 +1255,53 @@ def _handle_meta_new_lead(endpoint_label: str, allow_legacy_lorena_fallback: boo
                     payload={"lead_index": idx},
                 )
                 continue
+
+            _wh_log(
+                f"LEAD_{idx} | OK_WHATSAPP | canal=leads_meta | cod=MENSAGEM_ENVIADA_EVOLUTION | "
+                f"cliente={route['client_name']} | page_id={page_id} | group_id={group_id} | "
+                f"evolution_instance={_evolution_instance_label()}"
+            )
+            sent += 1
+            _emit_runtime_event(
+                stage="WHATSAPP_ENVIADO_OK",
+                status="ok",
+                detail="Mensagem enviada ao grupo",
+                client_name=route["client_name"],
+                page_id=page_id,
+                group_id=group_id,
+                payload={"lead_index": idx},
+            )
+
+            int_gid = (route.get("internal_notify_group_id") or "").strip()
+            int_msg = (route.get("internal_notify_message") or "").strip()
+            if int_gid and int_msg:
+                base_fields = _base_message_fields(body, route=route)
+                int_ctx = {
+                    "client_name": route["client_name"],
+                    "page_id": page_id,
+                    "template_id": route["template"],
+                    "nome": base_fields["nome"],
+                    "email": base_fields["email"],
+                    "whatsapp": base_fields["whatsapp"],
+                    "telefone_digitos": base_fields["telefone_digitos"],
+                    "form_name": base_fields["form_name"],
+                    "respostas": base_fields["respostas"],
+                    "respostas_filtradas": base_fields["respostas_filtradas"],
+                    "respostas_raw": base_fields["respostas_raw"],
+                    "respostas_omitidas": base_fields["respostas_omitidas"],
+                    "respostas_count": base_fields["respostas_count"],
+                    "respostas_raw_count": base_fields["respostas_raw_count"],
+                    "respostas_omitidas_count": base_fields["respostas_omitidas_count"],
+                    "received_at": base_fields["received_at"],
+                    "chegada_em": base_fields["chegada_em"],
+                }
+                int_body = render_template_text(int_msg, int_ctx)
+                if int_body.strip() and not client.send_text_message(int_gid, int_body):
+                    logger.warning(
+                        "Falha ao enviar copia interna da empresa | group=%s | cliente=%s",
+                        int_gid,
+                        route["client_name"],
+                    )
 
             extra_phone = _digits_only(route.get("phone_number"))
             if route.get("template") == "pratical_life" and extra_phone:

@@ -74,7 +74,55 @@ DEFAULT_TEMPLATES: Dict[str, Dict[str, Dict[str, str]]] = {
                 "📌 *Campanhas ativas (metricas por campanha):*\n"
                 "{{campaigns_block}}"
             ),
-        }
+        },
+        "p12_resumo": {
+            "name": "P12 — Resumo Google",
+            "description": "Relatório semanal enxuto para grupo interno P12.",
+            "content": (
+                "📊 *P12 · Google Ads* — *{{client_name}}*\n"
+                "🆔 {{customer_id}} · 📅 {{period_start_br}} a {{period_end_br}}\n\n"
+                "🎯 *Conversoes primarias:*\n"
+                "{{conversions_block}}\n"
+            ),
+        },
+        "p12_dados": {
+            "name": "P12 — Dados (campanhas)",
+            "description": "Métricas por campanha para grupo interno P12.",
+            "content": (
+                "📌 *P12 · Campanhas* — *{{client_name}}*\n"
+                "🆔 {{customer_id}} · 📅 {{period_start_br}} a {{period_end_br}}\n"
+                "{{campaigns_block}}"
+            ),
+        },
+    },
+    "meta_report": {
+        "default": {
+            "name": "Meta — Relatório semanal (padrão)",
+            "description": "Bloco da semana + comparativo; use no grupo do cliente ou P12.",
+            "content": (
+                "*{{client_name}}*\n\n"
+                "{{week_report_block}}\n\n"
+                "{{compare_report_block}}"
+            ),
+        },
+        "p12_resumo": {
+            "name": "P12 — Resumo Meta",
+            "description": "Resumo da semana corrente para grupo P12.",
+            "content": (
+                "📊 *P12 · Meta Ads* — *{{client_name}}*\n"
+                "📅 *Semana:* {{period_a_start_br}} a {{period_a_end_br}}\n\n"
+                "{{week_report_block}}"
+            ),
+        },
+        "p12_dados": {
+            "name": "P12 — Comparativo Meta",
+            "description": "Comparativo com a semana anterior (dados).",
+            "content": (
+                "📉 *P12 · Comparativo* — *{{client_name}}*\n"
+                "📅 *Semana anterior:* {{period_b_start_br}} a {{period_b_end_br}}\n\n"
+                "{{compare_report_block}}"
+            ),
+        },
     },
 }
 
@@ -103,8 +151,20 @@ TEMPLATE_VARIABLES: Dict[str, Dict[str, str]] = {
         "customer_id": "ID formatado da conta Google Ads",
         "period_start_br": "Data início em DD/MM/AAAA",
         "period_end_br": "Data fim em DD/MM/AAAA",
+        "period_label": "Intervalo do relatório (texto) — notificação interna",
         "conversions_block": "Lista formatada de conversões",
         "campaigns_block": "Lista formatada de campanhas",
+    },
+    "meta_report": {
+        "client_name": "Nome do cliente",
+        "period_a_start_br": "Início do período A (7 dias) em DD/MM/AAAA",
+        "period_a_end_br": "Fim do período A em DD/MM/AAAA",
+        "period_b_start_br": "Início do período B (semana anterior) em DD/MM/AAAA",
+        "period_b_end_br": "Fim do período B em DD/MM/AAAA",
+        "period_label": "Resumo do intervalo (ex.: DD/MM/AAAA a DD/MM/AAAA) — notificação interna",
+        "week_report_block": "Texto formatado da semana atual",
+        "compare_report_block": "Texto formatado do comparativo",
+        "report_full": "Semana atual + comparativo já concatenados",
     },
 }
 

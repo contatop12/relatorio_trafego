@@ -254,6 +254,8 @@ function bindFiltersHelpModal() {
 
 /** IDs de template Meta Lead conhecidos no backend (integrados). */
 const META_LEAD_BUILTIN_IDS = ["default", "lorena", "pratical_life"];
+const META_REPORT_BUILTIN_IDS = ["default", "p12_resumo", "p12_dados"];
+const GOOGLE_REPORT_BUILTIN_IDS = ["default", "p12_resumo", "p12_dados"];
 
 function metaLeadTemplateBucket() {
   const ch = state.templates?.channels?.meta_lead;
@@ -314,6 +316,159 @@ function populateLeadTemplateSelect(selectEl, currentValue) {
   selectEl.value = cur;
 }
 
+function channelTemplateBucket(channel) {
+  const ch = state.templates?.channels?.[channel];
+  return ch && typeof ch === "object" ? ch : {};
+}
+
+/**
+ * @param {HTMLSelectElement|null} selectEl
+ * @param {string} channel
+ * @param {string[]} builtinIds
+ * @param {string} currentValue
+ * @param {boolean} allowEmpty - primeira opção value="" (template dados opcional)
+ */
+function populateChannelTemplateSelect(selectEl, channel, builtinIds, currentValue, allowEmpty) {
+  if (!selectEl) return;
+  const cur = String(currentValue ?? "").trim();
+  const bucket = channelTemplateBucket(channel);
+  selectEl.innerHTML = "";
+  if (allowEmpty) {
+    const o = document.createElement("option");
+    o.value = "";
+    o.textContent = "— Opcional —";
+    selectEl.appendChild(o);
+  }
+  const mkOptgroup = (label) => {
+    const og = document.createElement("optgroup");
+    og.label = label;
+    return og;
+  };
+  const builtinOg = mkOptgroup("Integrados");
+  builtinIds.forEach((id) => {
+    const entry = bucket[id];
+    const opt = document.createElement("option");
+    opt.value = id;
+    opt.textContent = entry?.name || id;
+    builtinOg.appendChild(opt);
+  });
+  selectEl.appendChild(builtinOg);
+  const customIds = Object.keys(bucket)
+    .filter((id) => !builtinIds.includes(id))
+    .sort((a, b) => {
+      const na = (bucket[a]?.name || a).toLowerCase();
+      const nb = (bucket[b]?.name || b).toLowerCase();
+      return na.localeCompare(nb, "pt-BR");
+    });
+  if (customIds.length) {
+    const customOg = mkOptgroup("Personalizados (aba Templates)");
+    customIds.forEach((id) => {
+      const entry = bucket[id];
+      const opt = document.createElement("option");
+      opt.value = id;
+      opt.textContent = entry?.name ? `${entry.name} · ${id}` : id;
+      customOg.appendChild(opt);
+    });
+    selectEl.appendChild(customOg);
+  }
+  const known = new Set([...builtinIds, ...Object.keys(bucket), ""]);
+  if (cur && !known.has(cur)) {
+    const orphan = document.createElement("option");
+    orphan.value = cur;
+    orphan.textContent = `ID salvo: ${cur}`;
+    selectEl.insertBefore(orphan, selectEl.firstChild);
+  }
+  if (allowEmpty && cur === "") {
+    selectEl.value = "";
+  } else {
+    selectEl.value = cur || builtinIds[0] || "default";
+  }
+}
+
+function refreshMetaReportTemplateSelects() {
+  const newForm = document.getElementById("newClientForm");
+  if (newForm) {
+    const t1 = newForm.querySelector('select[name="p12_report_template"]');
+    const t2 = newForm.querySelector('select[name="p12_data_report_template"]');
+    populateChannelTemplateSelect(
+      t1,
+      "meta_report",
+      META_REPORT_BUILTIN_IDS,
+      t1?.value || "default",
+      false
+    );
+    populateChannelTemplateSelect(
+      t2,
+      "meta_report",
+      META_REPORT_BUILTIN_IDS,
+      t2?.value || "",
+      true
+    );
+  }
+  document.querySelectorAll("#clientsGrid .client-card").forEach((card) => {
+    const cid = card.dataset.clientId;
+    const client = state.metaClients.find((c) => String(c.id) === String(cid));
+    const t1 = card.querySelector('select[name="p12_report_template"]');
+    const t2 = card.querySelector('select[name="p12_data_report_template"]');
+    populateChannelTemplateSelect(
+      t1,
+      "meta_report",
+      META_REPORT_BUILTIN_IDS,
+      client?.p12_report_template || t1?.value || "default",
+      false
+    );
+    populateChannelTemplateSelect(
+      t2,
+      "meta_report",
+      META_REPORT_BUILTIN_IDS,
+      client?.p12_data_report_template || t2?.value || "",
+      true
+    );
+  });
+}
+
+function refreshGoogleP12TemplateSelects() {
+  const newG = document.getElementById("newGoogleClientForm");
+  if (newG) {
+    const t1 = newG.querySelector('select[name="p12_report_template"]');
+    const t2 = newG.querySelector('select[name="p12_data_report_template"]');
+    populateChannelTemplateSelect(
+      t1,
+      "google_report",
+      GOOGLE_REPORT_BUILTIN_IDS,
+      t1?.value || "default",
+      false
+    );
+    populateChannelTemplateSelect(
+      t2,
+      "google_report",
+      GOOGLE_REPORT_BUILTIN_IDS,
+      t2?.value || "",
+      true
+    );
+  }
+  document.querySelectorAll("#googleClientsGrid .client-card").forEach((card) => {
+    const cid = card.dataset.clientId;
+    const client = state.googleClients.find((c) => String(c.id) === String(cid));
+    const t1 = card.querySelector('select[name="p12_report_template"]');
+    const t2 = card.querySelector('select[name="p12_data_report_template"]');
+    populateChannelTemplateSelect(
+      t1,
+      "google_report",
+      GOOGLE_REPORT_BUILTIN_IDS,
+      client?.p12_report_template || t1?.value || "default",
+      false
+    );
+    populateChannelTemplateSelect(
+      t2,
+      "google_report",
+      GOOGLE_REPORT_BUILTIN_IDS,
+      client?.p12_data_report_template || t2?.value || "",
+      true
+    );
+  });
+}
+
 function refreshLeadTemplateSelects() {
   const newSel = document.getElementById("newClientLeadTemplate");
   if (newSel) populateLeadTemplateSelect(newSel, newSel.value || "default");
@@ -324,6 +479,8 @@ function refreshLeadTemplateSelects() {
     const client = state.metaClients.find((c) => String(c.id) === String(cid));
     populateLeadTemplateSelect(sel, client?.lead_template || sel.value || "default");
   });
+  refreshMetaReportTemplateSelects();
+  refreshGoogleP12TemplateSelects();
 }
 
 function ensureChipControl(form, fieldName) {
@@ -487,6 +644,10 @@ function renderMetaClients() {
     card.querySelector(".f-group_id").textContent = client.group_id || "-";
     card.querySelector(".f-meta_page_id").textContent = client.meta_page_id || "(vazio)";
     card.querySelector(".f-lead_group_id").textContent = client.lead_group_id || "(fallback group_id)";
+    const fP12 = card.querySelector(".f-p12_report_group_id");
+    if (fP12) fP12.textContent = client.p12_report_group_id || "—";
+    const fInt = card.querySelector(".f-internal_short");
+    if (fInt) fInt.textContent = client.internal_notify_group_id ? "configurado" : "—";
     card.querySelector(".f-lead_template").textContent = client.lead_template || "default";
     card.querySelector(".f-enabled").textContent = client.enabled ? "true" : "false";
 
@@ -495,6 +656,8 @@ function renderMetaClients() {
     checks.appendChild(checkPill("group_id", !!client.checks?.group_id_ok));
     checks.appendChild(checkPill("meta_page_id", !!client.checks?.meta_page_id_ok));
     checks.appendChild(checkPill("lead_group_id", !!client.checks?.lead_group_id_ok));
+    checks.appendChild(checkPill("p12_report_group_id", !!client.checks?.p12_report_group_id_ok));
+    checks.appendChild(checkPill("interno", !!client.checks?.internal_notify_group_id_ok));
 
     const list = card.querySelector(".event-list");
     const events = normalizeClientEvents(client.client_name);
@@ -512,6 +675,12 @@ function renderMetaClients() {
     editForm.elements.lead_exclude_contains.value = (client.lead_exclude_contains || []).join(", ");
     editForm.elements.lead_exclude_regex.value = (client.lead_exclude_regex || []).join(", ");
     editForm.elements.enabled.checked = !!client.enabled;
+    if (editForm.elements.p12_report_group_id)
+      editForm.elements.p12_report_group_id.value = client.p12_report_group_id || "";
+    if (editForm.elements.internal_notify_group_id)
+      editForm.elements.internal_notify_group_id.value = client.internal_notify_group_id || "";
+    if (editForm.elements.internal_notify_message)
+      editForm.elements.internal_notify_message.value = client.internal_notify_message || "";
     setupChipFields(editForm, ["lead_exclude_fields", "lead_exclude_contains", "lead_exclude_regex"]);
 
     card.querySelector('[data-action="toggle-edit"]').addEventListener("click", () => {
@@ -554,6 +723,20 @@ function renderMetaClients() {
 
     grid.appendChild(node);
   });
+  refreshMetaReportTemplateSelects();
+  state.metaClients.forEach((client) => {
+    const card = document.querySelector(`#clientsGrid .client-card[data-client-id="${client.id}"]`);
+    if (!card) return;
+    const ef = card.querySelector(".edit-form");
+    if (!ef) return;
+    if (ef.elements.p12_report_group_id) ef.elements.p12_report_group_id.value = client.p12_report_group_id || "";
+    const t1 = ef.querySelector('[name="p12_report_template"]');
+    const t2 = ef.querySelector('[name="p12_data_report_template"]');
+    if (t1) t1.value = client.p12_report_template || "default";
+    if (t2) t2.value = client.p12_data_report_template ?? "";
+    if (ef.elements.internal_notify_group_id) ef.elements.internal_notify_group_id.value = client.internal_notify_group_id || "";
+    if (ef.elements.internal_notify_message) ef.elements.internal_notify_message.value = client.internal_notify_message || "";
+  });
   syncMetaCatalogSelects();
 }
 
@@ -572,6 +755,8 @@ function renderGoogleClients() {
     pill.textContent = statusLabel;
     card.querySelector(".g-google_customer_id").textContent = client.google_customer_id || "-";
     card.querySelector(".g-group_id").textContent = client.group_id || "-";
+    const gp12 = card.querySelector(".g-p12_report_group_id");
+    if (gp12) gp12.textContent = client.p12_report_group_id || "—";
     card.querySelector(".g-google_template").textContent = client.google_template || "default";
     card.querySelector(".g-enabled").textContent = client.enabled ? "true" : "false";
     card.querySelector(".g-primary_conversions").textContent = (client.primary_conversions || []).join(", ") || "(vazio)";
@@ -579,6 +764,8 @@ function renderGoogleClients() {
     const checks = card.querySelector(".checks");
     checks.appendChild(checkPill("customer_id", !!client.checks?.customer_id_ok));
     checks.appendChild(checkPill("group_id", !!client.checks?.group_id_ok));
+    checks.appendChild(checkPill("p12_grupo", !!client.checks?.p12_report_group_id_ok));
+    checks.appendChild(checkPill("interno", !!client.checks?.internal_notify_group_id_ok));
 
     const editForm = card.querySelector(".edit-form");
     const feedback = card.querySelector(".edit-feedback");
@@ -589,6 +776,12 @@ function renderGoogleClients() {
     editForm.elements.primary_conversions.value = (client.primary_conversions || []).join(", ");
     editForm.elements.notes.value = client.notes || "";
     editForm.elements.enabled.checked = !!client.enabled;
+    if (editForm.elements.lead_phone_number) editForm.elements.lead_phone_number.value = client.lead_phone_number || "";
+    if (editForm.elements.p12_report_group_id) editForm.elements.p12_report_group_id.value = client.p12_report_group_id || "";
+    if (editForm.elements.internal_notify_group_id)
+      editForm.elements.internal_notify_group_id.value = client.internal_notify_group_id || "";
+    if (editForm.elements.internal_notify_message)
+      editForm.elements.internal_notify_message.value = client.internal_notify_message || "";
 
     card.querySelector('[data-action="toggle-edit-google"]').addEventListener("click", () => {
       editForm.classList.toggle("hidden");
@@ -620,6 +813,20 @@ function renderGoogleClients() {
     });
 
     grid.appendChild(node);
+  });
+  refreshGoogleP12TemplateSelects();
+  state.googleClients.forEach((client) => {
+    const card = document.querySelector(`#googleClientsGrid .client-card[data-client-id="${client.id}"]`);
+    if (!card) return;
+    const ef = card.querySelector(".edit-form");
+    if (!ef) return;
+    const t1 = ef.querySelector('[name="p12_report_template"]');
+    const t2 = ef.querySelector('[name="p12_data_report_template"]');
+    if (t1) t1.value = client.p12_report_template || "default";
+    if (t2) t2.value = client.p12_data_report_template ?? "";
+    if (ef.elements.p12_report_group_id) ef.elements.p12_report_group_id.value = client.p12_report_group_id || "";
+    if (ef.elements.internal_notify_group_id) ef.elements.internal_notify_group_id.value = client.internal_notify_group_id || "";
+    if (ef.elements.internal_notify_message) ef.elements.internal_notify_message.value = client.internal_notify_message || "";
   });
 }
 

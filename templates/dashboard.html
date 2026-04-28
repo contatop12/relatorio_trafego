@@ -78,6 +78,43 @@
                 </select>
                 <span class="field-hint">Mesmo catálogo; vazio usa o grupo relatório como fallback no fluxo.</span>
               </label>
+              <label>
+                Telefone lead
+                <input name="lead_phone_number" inputmode="tel" placeholder="Opcional — wa.me extra / testes" />
+                <span class="field-hint">Usado em fluxos com envio extra para número (ex.: template Pratical Life).</span>
+              </label>
+              <label>
+                Grupo P12 relatório
+                <select name="p12_report_group_id" class="field-select catalog-group-select" data-catalog-optional="1">
+                  <option value="">(Opcional) sem grupo P12</option>
+                </select>
+                <span class="field-hint">Relatório semanal Meta (resumo + dados) para a equipe P12.</span>
+              </label>
+              <label>
+                Template P12 relatório
+                <select name="p12_report_template" class="field-select meta-report-template-select">
+                  <option value="default">default</option>
+                </select>
+                <span class="field-hint">Canal <code>meta_report</code> na aba Templates.</span>
+              </label>
+              <label>
+                Template relatório de dados
+                <select name="p12_data_report_template" class="field-select meta-report-data-template-select">
+                  <option value="">— Opcional — segunda mensagem ao grupo P12</option>
+                </select>
+              </label>
+              <label>
+                Grupo mensagem interna
+                <select name="internal_notify_group_id" class="field-select catalog-group-select" data-catalog-optional="1">
+                  <option value="">(Opcional) sem cópia interna</option>
+                </select>
+                <span class="field-hint">Cópia opcional para equipe interna ao chegar novo lead.</span>
+              </label>
+              <label class="edit-field--full">
+                Mensagem interna (template)
+                <textarea name="internal_notify_message" rows="3" placeholder="Ex.: Novo lead · {{client_name}} · {{nome}}"></textarea>
+                <span class="field-hint">Variáveis como em Template lead: {{nome}}, {{respostas}}, {{chegada_em}}, etc.</span>
+              </label>
               <label class="new-client-field-template">
                 Template lead
                 <select
@@ -202,8 +239,43 @@
                 <span class="field-hint">Lista da aba Grupos WhatsApp.</span>
               </label>
               <label>
-                Template Google
+                Template Google (cliente)
                 <input name="google_template" value="default" placeholder="default / personalizado" />
+              </label>
+              <label>
+                Telefone lead
+                <input name="lead_phone_number" inputmode="tel" placeholder="Opcional" />
+              </label>
+              <label>
+                Grupo P12 relatório
+                <select name="p12_report_group_id" class="field-select catalog-group-select" data-catalog-optional="1">
+                  <option value="">(Opcional)</option>
+                </select>
+              </label>
+              <label>
+                Template P12 relatório
+                <select name="p12_report_template" class="field-select google-p12-template-select">
+                  <option value="default">default</option>
+                </select>
+                <span class="field-hint">Canal <code>google_report</code> — ex.: p12_resumo</span>
+              </label>
+              <label>
+                Template relatório de dados
+                <select name="p12_data_report_template" class="field-select google-p12-data-template-select">
+                  <option value="">— Opcional —</option>
+                </select>
+                <span class="field-hint">Segunda mensagem ao P12 — ex.: p12_dados</span>
+              </label>
+              <label>
+                Grupo mensagem interna
+                <select name="internal_notify_group_id" class="field-select catalog-group-select" data-catalog-optional="1">
+                  <option value="">(Opcional)</option>
+                </select>
+              </label>
+              <label class="edit-field--full">
+                Mensagem interna
+                <textarea name="internal_notify_message" rows="2" placeholder="Ex.: Relatório Google · {{client_name}} · {{period_label}}"></textarea>
+                <span class="field-hint">Variáveis: {{client_name}}, {{customer_id}}, {{period_start_br}}, {{period_end_br}}, {{period_label}}</span>
               </label>
               <label>
                 Conversões primárias (CSV)
@@ -543,8 +615,10 @@
             <div><dt>Grupo relatório</dt><dd class="f-group_id"></dd></div>
             <div><dt>Page ID</dt><dd class="f-meta_page_id"></dd></div>
             <div><dt>Grupo lead</dt><dd class="f-lead_group_id"></dd></div>
+            <div><dt>Grupo P12</dt><dd class="f-p12_report_group_id"></dd></div>
             <div><dt>Template lead</dt><dd class="f-lead_template"></dd></div>
             <div><dt>Enabled</dt><dd class="f-enabled"></dd></div>
+            <div><dt>Interno (lead)</dt><dd class="f-internal_short"></dd></div>
           </dl>
           <div class="checks"></div>
           <div class="actions">
@@ -589,6 +663,32 @@
               <label class="edit-field">
                 Telefone lead
                 <input name="lead_phone_number" inputmode="tel" placeholder="Opcional" />
+              </label>
+              <label class="edit-field">
+                Grupo P12 relatório
+                <select name="p12_report_group_id" class="field-select catalog-group-select" data-catalog-optional="1">
+                  <option value="">(Opcional)</option>
+                </select>
+              </label>
+              <label class="edit-field">
+                Template P12 relatório
+                <select name="p12_report_template" class="field-select meta-report-template-select"></select>
+              </label>
+              <label class="edit-field">
+                Template relatório de dados
+                <select name="p12_data_report_template" class="field-select meta-report-data-template-select">
+                  <option value="">— Opcional —</option>
+                </select>
+              </label>
+              <label class="edit-field">
+                Grupo mensagem interna
+                <select name="internal_notify_group_id" class="field-select catalog-group-select" data-catalog-optional="1">
+                  <option value="">(Opcional)</option>
+                </select>
+              </label>
+              <label class="edit-field edit-field--full">
+                Mensagem interna
+                <textarea name="internal_notify_message" rows="2" placeholder="Template com {{variaveis}} do lead"></textarea>
               </label>
               <label class="edit-field edit-field--full">
                 Template lead
@@ -700,6 +800,7 @@
           <dl class="meta-grid">
             <div><dt>Customer ID</dt><dd class="g-google_customer_id"></dd></div>
             <div><dt>Grupo</dt><dd class="g-group_id"></dd></div>
+            <div><dt>Grupo P12</dt><dd class="g-p12_report_group_id"></dd></div>
             <div><dt>Template</dt><dd class="g-google_template"></dd></div>
             <div><dt>Enabled</dt><dd class="g-enabled"></dd></div>
             <div><dt>Conversões</dt><dd class="g-primary_conversions"></dd></div>
@@ -722,8 +823,38 @@
               </select>
             </label>
             <label>
-              Template Google
+              Template Google (cliente)
               <input name="google_template" />
+            </label>
+            <label>
+              Telefone lead
+              <input name="lead_phone_number" inputmode="tel" placeholder="Opcional" />
+            </label>
+            <label>
+              Grupo P12 relatório
+              <select name="p12_report_group_id" class="field-select catalog-group-select" data-catalog-optional="1">
+                <option value="">(Opcional)</option>
+              </select>
+            </label>
+            <label>
+              Template P12 relatório
+              <select name="p12_report_template" class="field-select google-p12-template-select"></select>
+            </label>
+            <label>
+              Template relatório de dados
+              <select name="p12_data_report_template" class="field-select google-p12-data-template-select">
+                <option value="">— Opcional —</option>
+              </select>
+            </label>
+            <label>
+              Grupo mensagem interna
+              <select name="internal_notify_group_id" class="field-select catalog-group-select" data-catalog-optional="1">
+                <option value="">(Opcional)</option>
+              </select>
+            </label>
+            <label>
+              Mensagem interna
+              <textarea name="internal_notify_message" rows="2"></textarea>
             </label>
             <label>
               Conversões (CSV)

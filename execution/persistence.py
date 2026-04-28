@@ -91,7 +91,9 @@ def list_meta_clients() -> List[Dict[str, Any]]:
                 """
                 SELECT id, client_name, ad_account_id, group_id, meta_page_id, lead_group_id,
                        lead_phone_number, lead_template, lead_exclude_fields, lead_exclude_contains,
-                       lead_exclude_regex, enabled
+                       lead_exclude_regex, enabled,
+                       p12_report_group_id, p12_report_template, p12_data_report_template,
+                       internal_notify_group_id, internal_notify_message
                 FROM meta_clients
                 ORDER BY sort_order ASC, id ASC
                 """
@@ -113,6 +115,11 @@ def list_meta_clients() -> List[Dict[str, Any]]:
                 "lead_exclude_contains": _json_list(r.get("lead_exclude_contains")),
                 "lead_exclude_regex": _json_list(r.get("lead_exclude_regex")),
                 "enabled": bool(r.get("enabled", True)),
+                "p12_report_group_id": str(r.get("p12_report_group_id") or ""),
+                "p12_report_template": str(r.get("p12_report_template") or ""),
+                "p12_data_report_template": str(r.get("p12_data_report_template") or ""),
+                "internal_notify_group_id": str(r.get("internal_notify_group_id") or ""),
+                "internal_notify_message": str(r.get("internal_notify_message") or ""),
             }
         )
     return out
@@ -133,11 +140,15 @@ def insert_meta_client(data: Dict[str, Any]) -> int:
                 INSERT INTO meta_clients (
                   client_name, ad_account_id, group_id, meta_page_id, lead_group_id,
                   lead_phone_number, lead_template, lead_exclude_fields, lead_exclude_contains,
-                  lead_exclude_regex, enabled
+                  lead_exclude_regex, enabled,
+                  p12_report_group_id, p12_report_template, p12_data_report_template,
+                  internal_notify_group_id, internal_notify_message
                 ) VALUES (
                   %(client_name)s, %(ad_account_id)s, %(group_id)s, %(meta_page_id)s, %(lead_group_id)s,
                   %(lead_phone_number)s, %(lead_template)s, %(lead_exclude_fields)s,
-                  %(lead_exclude_contains)s, %(lead_exclude_regex)s, %(enabled)s
+                  %(lead_exclude_contains)s, %(lead_exclude_regex)s, %(enabled)s,
+                  %(p12_report_group_id)s, %(p12_report_template)s, %(p12_data_report_template)s,
+                  %(internal_notify_group_id)s, %(internal_notify_message)s
                 )
                 RETURNING id
                 """,
@@ -153,6 +164,11 @@ def insert_meta_client(data: Dict[str, Any]) -> int:
                     "lead_exclude_contains": Json(data.get("lead_exclude_contains") or []),
                     "lead_exclude_regex": Json(data.get("lead_exclude_regex") or []),
                     "enabled": bool(data.get("enabled", True)),
+                    "p12_report_group_id": data.get("p12_report_group_id", ""),
+                    "p12_report_template": data.get("p12_report_template", ""),
+                    "p12_data_report_template": data.get("p12_data_report_template", ""),
+                    "internal_notify_group_id": data.get("internal_notify_group_id", ""),
+                    "internal_notify_message": data.get("internal_notify_message", ""),
                 },
             )
             row = cur.fetchone()
@@ -176,6 +192,11 @@ def update_meta_client(client_id: int, data: Dict[str, Any]) -> None:
                   lead_exclude_contains = %(lead_exclude_contains)s,
                   lead_exclude_regex = %(lead_exclude_regex)s,
                   enabled = %(enabled)s,
+                  p12_report_group_id = %(p12_report_group_id)s,
+                  p12_report_template = %(p12_report_template)s,
+                  p12_data_report_template = %(p12_data_report_template)s,
+                  internal_notify_group_id = %(internal_notify_group_id)s,
+                  internal_notify_message = %(internal_notify_message)s,
                   updated_at = now()
                 WHERE id = %(id)s
                 """,
@@ -192,6 +213,11 @@ def update_meta_client(client_id: int, data: Dict[str, Any]) -> None:
                     "lead_exclude_contains": Json(data.get("lead_exclude_contains") or []),
                     "lead_exclude_regex": Json(data.get("lead_exclude_regex") or []),
                     "enabled": bool(data.get("enabled", True)),
+                    "p12_report_group_id": data.get("p12_report_group_id", ""),
+                    "p12_report_template": data.get("p12_report_template", ""),
+                    "p12_data_report_template": data.get("p12_data_report_template", ""),
+                    "internal_notify_group_id": data.get("internal_notify_group_id", ""),
+                    "internal_notify_message": data.get("internal_notify_message", ""),
                 },
             )
 
@@ -202,7 +228,9 @@ def list_google_clients() -> List[Dict[str, Any]]:
             cur.execute(
                 """
                 SELECT id, client_name, google_customer_id, group_id, notes, google_template,
-                       primary_conversions, enabled
+                       primary_conversions, enabled,
+                       lead_phone_number, p12_report_group_id, p12_report_template,
+                       p12_data_report_template, internal_notify_group_id, internal_notify_message
                 FROM google_clients
                 ORDER BY sort_order ASC, id ASC
                 """
@@ -223,6 +251,12 @@ def list_google_clients() -> List[Dict[str, Any]]:
                 "google_template": str(r["google_template"] or "default"),
                 "primary_conversions": [str(x).strip() for x in pc if str(x).strip()],
                 "enabled": bool(r.get("enabled", True)),
+                "lead_phone_number": str(r.get("lead_phone_number") or ""),
+                "p12_report_group_id": str(r.get("p12_report_group_id") or ""),
+                "p12_report_template": str(r.get("p12_report_template") or ""),
+                "p12_data_report_template": str(r.get("p12_data_report_template") or ""),
+                "internal_notify_group_id": str(r.get("internal_notify_group_id") or ""),
+                "internal_notify_message": str(r.get("internal_notify_message") or ""),
             }
         )
     return out
@@ -245,10 +279,14 @@ def insert_google_client(data: Dict[str, Any]) -> int:
                 """
                 INSERT INTO google_clients (
                   client_name, google_customer_id, group_id, notes, google_template,
-                  primary_conversions, enabled
+                  primary_conversions, enabled,
+                  lead_phone_number, p12_report_group_id, p12_report_template,
+                  p12_data_report_template, internal_notify_group_id, internal_notify_message
                 ) VALUES (
                   %(client_name)s, %(google_customer_id)s, %(group_id)s, %(notes)s, %(google_template)s,
-                  %(primary_conversions)s, %(enabled)s
+                  %(primary_conversions)s, %(enabled)s,
+                  %(lead_phone_number)s, %(p12_report_group_id)s, %(p12_report_template)s,
+                  %(p12_data_report_template)s, %(internal_notify_group_id)s, %(internal_notify_message)s
                 )
                 RETURNING id
                 """,
@@ -260,6 +298,12 @@ def insert_google_client(data: Dict[str, Any]) -> int:
                     "google_template": data.get("google_template", "default"),
                     "primary_conversions": Json(primary),
                     "enabled": bool(data.get("enabled", True)),
+                    "lead_phone_number": data.get("lead_phone_number", ""),
+                    "p12_report_group_id": data.get("p12_report_group_id", ""),
+                    "p12_report_template": data.get("p12_report_template", ""),
+                    "p12_data_report_template": data.get("p12_data_report_template", ""),
+                    "internal_notify_group_id": data.get("internal_notify_group_id", ""),
+                    "internal_notify_message": data.get("internal_notify_message", ""),
                 },
             )
             return int(cur.fetchone()["id"])
@@ -281,6 +325,12 @@ def update_google_client(client_id: int, data: Dict[str, Any]) -> None:
                   google_template = %(google_template)s,
                   primary_conversions = %(primary_conversions)s,
                   enabled = %(enabled)s,
+                  lead_phone_number = %(lead_phone_number)s,
+                  p12_report_group_id = %(p12_report_group_id)s,
+                  p12_report_template = %(p12_report_template)s,
+                  p12_data_report_template = %(p12_data_report_template)s,
+                  internal_notify_group_id = %(internal_notify_group_id)s,
+                  internal_notify_message = %(internal_notify_message)s,
                   updated_at = now()
                 WHERE id = %(id)s
                 """,
@@ -293,6 +343,12 @@ def update_google_client(client_id: int, data: Dict[str, Any]) -> None:
                     "google_template": data.get("google_template", "default"),
                     "primary_conversions": Json(primary),
                     "enabled": bool(data.get("enabled", True)),
+                    "lead_phone_number": data.get("lead_phone_number", ""),
+                    "p12_report_group_id": data.get("p12_report_group_id", ""),
+                    "p12_report_template": data.get("p12_report_template", ""),
+                    "p12_data_report_template": data.get("p12_data_report_template", ""),
+                    "internal_notify_group_id": data.get("internal_notify_group_id", ""),
+                    "internal_notify_message": data.get("internal_notify_message", ""),
                 },
             )
 
@@ -330,6 +386,31 @@ def save_template_channels(channels: Dict[str, Any]) -> None:
         if isinstance(v, dict):
             body[k] = deepcopy(v)
     save_message_templates_body(body)
+
+
+def _migrate_db_schema() -> None:
+    """ADD COLUMN para clientes Meta/Google (idempotente; Supabase/Postgres)."""
+    if not db_enabled():
+        return
+    meta_sql = [
+        "ALTER TABLE meta_clients ADD COLUMN IF NOT EXISTS p12_report_group_id text NOT NULL DEFAULT ''",
+        "ALTER TABLE meta_clients ADD COLUMN IF NOT EXISTS p12_report_template text NOT NULL DEFAULT ''",
+        "ALTER TABLE meta_clients ADD COLUMN IF NOT EXISTS p12_data_report_template text NOT NULL DEFAULT ''",
+        "ALTER TABLE meta_clients ADD COLUMN IF NOT EXISTS internal_notify_group_id text NOT NULL DEFAULT ''",
+        "ALTER TABLE meta_clients ADD COLUMN IF NOT EXISTS internal_notify_message text NOT NULL DEFAULT ''",
+    ]
+    google_sql = [
+        "ALTER TABLE google_clients ADD COLUMN IF NOT EXISTS lead_phone_number text NOT NULL DEFAULT ''",
+        "ALTER TABLE google_clients ADD COLUMN IF NOT EXISTS p12_report_group_id text NOT NULL DEFAULT ''",
+        "ALTER TABLE google_clients ADD COLUMN IF NOT EXISTS p12_report_template text NOT NULL DEFAULT ''",
+        "ALTER TABLE google_clients ADD COLUMN IF NOT EXISTS p12_data_report_template text NOT NULL DEFAULT ''",
+        "ALTER TABLE google_clients ADD COLUMN IF NOT EXISTS internal_notify_group_id text NOT NULL DEFAULT ''",
+        "ALTER TABLE google_clients ADD COLUMN IF NOT EXISTS internal_notify_message text NOT NULL DEFAULT ''",
+    ]
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            for stmt in meta_sql + google_sql:
+                cur.execute(stmt)
 
 
 def seed_from_json_files_if_empty() -> None:
@@ -438,6 +519,8 @@ def ensure_db_ready() -> None:
         return
     _DB_BOOTSTRAPPED = True
     try:
+        if db_enabled():
+            _migrate_db_schema()
         seed_from_json_files_if_empty()
     except Exception as e:
         logger.warning("Falha ao preparar dados no Postgres: %s", e)

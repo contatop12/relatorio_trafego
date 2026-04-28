@@ -26,6 +26,7 @@ from execution.webhook_notify import (
     notify_meta_token_expirado,
 )
 from execution.project_paths import clients_json_path
+from execution.message_templates import get_template_content, render_template_text
 
 # Configuração de logging
 log_dir = os.path.join(os.path.dirname(__file__), '..', '.tmp')
@@ -41,6 +42,59 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+
+def _meta_p12_preview(client: Dict[str, Any], meta_report_ctx: Dict[str, Any]) -> str:
+    """Texto agregado para DRY_RUN (P12 + interno)."""
+    parts: List[str] = []
+    p12_gid = str(client.get("p12_report_group_id", "")).strip()
+    t1 = str(client.get("p12_report_template", "default")).strip() or "default"
+    t2 = str(client.get("p12_data_report_template", "")).strip()
+    if p12_gid:
+        c1 = get_template_content("meta_report", t1)
+        parts.append(
+            "## P12 (resumo)\n"
+            + (render_template_text(c1, meta_report_ctx) if c1 else str(meta_report_ctx.get("report_full", "")))
+        )
+        if t2:
+            c2 = get_template_content("meta_report", t2)
+            if c2:
+                parts.append("## P12 (dados)\n" + render_template_text(c2, meta_report_ctx))
+    int_msg = str(client.get("internal_notify_message", "")).strip()
+    int_gid = str(client.get("internal_notify_group_id", "")).strip()
+    if int_gid and int_msg:
+        pl = f"{meta_report_ctx.get('period_a_start_br', '')} a {meta_report_ctx.get('period_a_end_br', '')}"
+        parts.append("## Interno\n" + render_template_text(int_msg, {**meta_report_ctx, "period_label": pl}))
+    return "\n\n".join(parts) if parts else "(sem P12 / interno configurado no cliente)\n"
+
+
+def _send_meta_p12_and_internal(
+    evolution_client: Any,
+    client: Dict[str, Any],
+    meta_report_ctx: Dict[str, Any],
+    *,
+    period_label: str,
+) -> None:
+    p12_gid = str(client.get("p12_report_group_id", "")).strip()
+    t1 = str(client.get("p12_report_template", "default")).strip() or "default"
+    t2 = str(client.get("p12_data_report_template", "")).strip()
+    if p12_gid:
+        c1 = get_template_content("meta_report", t1)
+        text1 = render_template_text(c1, meta_report_ctx) if c1 else str(meta_report_ctx.get("report_full", ""))
+        if text1.strip() and not evolution_client.send_text_message(p12_gid, text1):
+            logger.warning("Falha no envio P12 (1) Meta | cliente=%s", client.get("client_name", ""))
+        if t2:
+            c2 = get_template_content("meta_report", t2)
+            if c2:
+                text2 = render_template_text(c2, meta_report_ctx)
+                if text2.strip() and not evolution_client.send_text_message(p12_gid, text2):
+                    logger.warning("Falha no envio P12 (2) Meta | cliente=%s", client.get("client_name", ""))
+    int_gid = str(client.get("internal_notify_group_id", "")).strip()
+    int_msg = str(client.get("internal_notify_message", "")).strip()
+    if int_gid and int_msg:
+        body = render_template_text(int_msg, {**meta_report_ctx, "period_label": period_label})
+        if body.strip() and not evolution_client.send_text_message(int_gid, body):
+            logger.warning("Falha no envio notificacao interna Meta | cliente=%s", client.get("client_name", ""))
 
 
 class P12RelatoriosReporter:
@@ -292,24 +346,17 @@ class P12RelatoriosReporter:
     
     def generate_and_send_report_for_client(
         self,
-        client_name: str,
-        ad_account_id: str,
-        group_id: str,
+        client: Dict[str, Any],
         *,
         send_if_zero_spend: bool = False,
     ) -> bool:
         """
-        Gera e envia o relatório (7 dias + comparativo semana anterior) em uma única mensagem WhatsApp.
-        
-        Args:
-            client_name: Nome do cliente
-            ad_account_id: ID da conta de anúncios (formato: act_XXXXXXXX)
-            group_id: ID do grupo WhatsApp para envio
-            send_if_zero_spend: Se True, envia mesmo com spend ~0 (ex.: envio manual)
-            
-        Returns:
-            True se o relatório foi gerado/enviado com sucesso, False caso contrário
+        Gera e envia o relatório (7 dias + comparativo semana anterior) em uma única mensagem WhatsApp
+        para o grupo do cliente; opcionalmente duas variantes de template para o grupo P12 e aviso interno.
         """
+        client_name = str(client.get("client_name", "") or "Cliente").strip()
+        ad_account_id = str(client.get("ad_account_id", "")).strip()
+        group_id = str(client.get("group_id", "")).strip()
         try:
             logger.info(f"Gerando relatório para cliente: {client_name} ({ad_account_id})")
             
@@ -366,7 +413,22 @@ class P12RelatoriosReporter:
             )
 
             full_message = f"{message_1.rstrip()}\n\n{message_2.rstrip()}"
-            
+
+            br_a_s = self._date_iso_to_br(period_a_start)
+            br_a_e = self._date_iso_to_br(period_a_end)
+            br_b_s = self._date_iso_to_br(period_b_start)
+            br_b_e = self._date_iso_to_br(period_b_end)
+            meta_report_ctx: Dict[str, Any] = {
+                "client_name": client_name,
+                "period_a_start_br": br_a_s,
+                "period_a_end_br": br_a_e,
+                "period_b_start_br": br_b_s,
+                "period_b_end_br": br_b_e,
+                "week_report_block": message_1,
+                "compare_report_block": message_2,
+                "report_full": full_message,
+            }
+
             # Modo DRY_RUN: salva em arquivo ao invés de enviar
             if self.dry_run:
                 log_dir = os.path.join(os.path.dirname(__file__), '..', '.tmp')
@@ -379,14 +441,26 @@ class P12RelatoriosReporter:
                     f.write("\n")
                 
                 logger.info(f"DRY_RUN: Relatório salvo em {report_file}")
+                p12_path = os.path.join(
+                    log_dir, f'report_p12_{ad_account_id.replace("act_", "")}.md'
+                )
+                with open(p12_path, "w", encoding="utf-8") as pf:
+                    pf.write(_meta_p12_preview(client, meta_report_ctx))
                 return True
-            
+
             logger.info(f"Enviando relatório (única mensagem) via WhatsApp para {client_name}...")
-            if self.evolution_client.send_text_message(group_id, full_message):
-                logger.info(f"Relatório enviado com sucesso para {client_name}")
-                return True
-            logger.error(f"Falha ao enviar relatório para {client_name}")
-            return False
+            if not self.evolution_client.send_text_message(group_id, full_message):
+                logger.error(f"Falha ao enviar relatório para {client_name}")
+                return False
+            logger.info(f"Relatório enviado com sucesso para {client_name}")
+
+            _send_meta_p12_and_internal(
+                self.evolution_client,
+                client,
+                meta_report_ctx,
+                period_label=f"{br_a_s} a {br_a_e}",
+            )
+            return True
                 
         except MetaAPIAuthError as e:
             logger.error(f"Erro de autenticação Meta para {client_name}: {str(e)}")
@@ -547,11 +621,7 @@ class P12RelatoriosReporter:
                 
                 # Gera e envia relatório para este cliente
                 try:
-                    success = self.generate_and_send_report_for_client(
-                        client_name,
-                        ad_account_id,
-                        group_id
-                    )
+                    success = self.generate_and_send_report_for_client(client)
                     
                     if success:
                         success_count += 1
