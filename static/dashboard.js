@@ -1388,9 +1388,13 @@ function renderSiteLeadRoutes() {
       editForm.elements.target_type.value,
       route.target_client_name || ""
     );
-    if (editForm.elements.group_id) editForm.elements.group_id.value = route.group_id || "";
+    if (editForm.elements.group_id) {
+      editForm.elements.group_id.dataset.currentValue = route.group_id || "";
+      editForm.elements.group_id.value = route.group_id || "";
+    }
     if (editForm.elements.lead_phone_number) editForm.elements.lead_phone_number.value = route.lead_phone_number || "";
     if (editForm.elements.internal_notify_group_id) {
+      editForm.elements.internal_notify_group_id.dataset.currentValue = route.internal_notify_group_id || "";
       editForm.elements.internal_notify_group_id.value = route.internal_notify_group_id || "";
     }
     if (editForm.elements.lead_template) {
@@ -1459,9 +1463,15 @@ function fillSiteLeadRouteForm(route) {
   form.elements.target_type.value = route.target_type || "meta";
   renderSiteTargetClientOptions(route.target_client_name || "");
   form.elements.target_client_name.value = route.target_client_name || "";
-  if (form.elements.group_id) form.elements.group_id.value = route.group_id || "";
+  if (form.elements.group_id) {
+    form.elements.group_id.dataset.currentValue = route.group_id || "";
+    form.elements.group_id.value = route.group_id || "";
+  }
   if (form.elements.lead_phone_number) form.elements.lead_phone_number.value = route.lead_phone_number || "";
-  if (form.elements.internal_notify_group_id) form.elements.internal_notify_group_id.value = route.internal_notify_group_id || "";
+  if (form.elements.internal_notify_group_id) {
+    form.elements.internal_notify_group_id.dataset.currentValue = route.internal_notify_group_id || "";
+    form.elements.internal_notify_group_id.value = route.internal_notify_group_id || "";
+  }
   if (form.elements.lead_template) form.elements.lead_template.value = route.lead_template || "default";
   if (form.elements.internal_lead_template) {
     form.elements.internal_lead_template.value = route.internal_lead_template || "";
@@ -1479,9 +1489,15 @@ function resetSiteLeadRouteForm() {
   form.dataset.editId = "";
   form.elements.enabled.checked = true;
   renderSiteTargetClientOptions("");
-  if (form.elements.group_id) form.elements.group_id.value = "";
+  if (form.elements.group_id) {
+    form.elements.group_id.dataset.currentValue = "";
+    form.elements.group_id.value = "";
+  }
   if (form.elements.lead_phone_number) form.elements.lead_phone_number.value = "";
-  if (form.elements.internal_notify_group_id) form.elements.internal_notify_group_id.value = "";
+  if (form.elements.internal_notify_group_id) {
+    form.elements.internal_notify_group_id.dataset.currentValue = "";
+    form.elements.internal_notify_group_id.value = "";
+  }
   if (form.elements.lead_template) form.elements.lead_template.value = "default";
   if (form.elements.internal_lead_template) form.elements.internal_lead_template.value = "";
   const submitBtn = form.querySelector('button[type="submit"]');
@@ -1913,6 +1929,10 @@ function syncCatalogGroupSelects() {
   document.querySelectorAll("select.catalog-group-select").forEach((sel) => {
     const optional = sel.dataset.catalogOptional === "1";
     let prev = (sel.value || "").trim();
+    if (!prev) {
+      const seeded = String(sel.dataset.currentValue || "").trim();
+      if (seeded) prev = seeded;
+    }
     const card = sel.closest(".client-card");
     const fieldName = String(sel.name || "").trim();
     if (card?.dataset?.clientId) {
@@ -1947,6 +1967,7 @@ function syncCatalogGroupSelects() {
     }
     const hasPrev = prev && [...sel.options].some((o) => o.value === prev);
     if (hasPrev) sel.value = prev;
+    sel.dataset.currentValue = "";
   });
 }
 

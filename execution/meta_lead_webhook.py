@@ -73,6 +73,12 @@ _EXCLUDE_RESPOSTAS = frozenset(
 # Ordem: legado Meta PT primeiro; depois chaves comuns em formulários instantâneos / Make.
 _LEAD_NAME_FIELD_KEYS = ("nome_completo", "nome", "full_name", "name")
 _LEAD_PHONE_FIELD_KEYS = ("telefone", "phone_number", "phone", "mobile", "celular")
+_PAGE_PATH_FIELD_KEYS = ("page_path", "pagePath", "path", "pathname", "url_path", "landing_page", "landingPage")
+_UTM_SOURCE_FIELD_KEYS = ("utm_source", "utmSource")
+_UTM_MEDIUM_FIELD_KEYS = ("utm_medium", "utmMedium")
+_UTM_CAMPAIGN_FIELD_KEYS = ("utm_campaign", "utmCampaign")
+_UTM_TERM_FIELD_KEYS = ("utm_term", "utmTerm")
+_UTM_CONTENT_FIELD_KEYS = ("utm_content", "utmContent")
 _LEAD_BODY_SIGNAL_KEYS = frozenset(
     {"email", "nome_completo", "telefone", "nome", "full_name", "name", "phone_number", "phone", "mobile", "celular"}
 )
@@ -1030,6 +1036,12 @@ def _base_message_fields(body: Dict[str, Any], route: Optional[Dict[str, Any]] =
     telefone_raw = _first_field_from_data_and_mappable(_LEAD_PHONE_FIELD_KEYS, data, mappable)
     wa_link = _format_whatsapp_line(telefone_raw)
     telefone_digitos = _digits_only(telefone_raw)
+    page_path = _first_field_from_data_and_mappable(_PAGE_PATH_FIELD_KEYS, data, mappable)
+    utm_source = _first_field_from_data_and_mappable(_UTM_SOURCE_FIELD_KEYS, data, mappable)
+    utm_medium = _first_field_from_data_and_mappable(_UTM_MEDIUM_FIELD_KEYS, data, mappable)
+    utm_campaign = _first_field_from_data_and_mappable(_UTM_CAMPAIGN_FIELD_KEYS, data, mappable)
+    utm_term = _first_field_from_data_and_mappable(_UTM_TERM_FIELD_KEYS, data, mappable)
+    utm_content = _first_field_from_data_and_mappable(_UTM_CONTENT_FIELD_KEYS, data, mappable)
 
     respostas_bundle = _build_respostas_bundle(
         mappable,
@@ -1044,6 +1056,12 @@ def _base_message_fields(body: Dict[str, Any], route: Optional[Dict[str, Any]] =
         "whatsapp": wa_link,
         "telefone_digitos": telefone_digitos or "(nao informado)",
         "form_name": _extract_form_name(body),
+        "page_path": page_path,
+        "utm_source": utm_source,
+        "utm_medium": utm_medium,
+        "utm_campaign": utm_campaign,
+        "utm_term": utm_term,
+        "utm_content": utm_content,
         "respostas": respostas_bundle["filtered_text"],
         "respostas_filtradas": respostas_bundle["filtered_text"],
         "respostas_raw": respostas_bundle["raw_text"],
@@ -1296,6 +1314,12 @@ def _format_lead_message(
                 "whatsapp": base["whatsapp"],
                 "telefone_digitos": base["telefone_digitos"],
                 "form_name": base["form_name"],
+                "page_path": base["page_path"],
+                "utm_source": base["utm_source"],
+                "utm_medium": base["utm_medium"],
+                "utm_campaign": base["utm_campaign"],
+                "utm_term": base["utm_term"],
+                "utm_content": base["utm_content"],
                 "respostas": base["respostas"],
                 "respostas_filtradas": base["respostas_filtradas"],
                 "respostas_raw": base["respostas_raw"],
