@@ -240,6 +240,23 @@ def _mappable_lookup(mappable: List[Dict[str, Any]], name: str) -> str:
     return ""
 
 
+def _pick_ci(container: Any, key: str) -> Any:
+    """Busca chave em dicionário sem diferenciar maiúsculas/minúsculas."""
+    if not isinstance(container, dict):
+        return None
+    target = str(key or "").strip()
+    if not target:
+        return None
+    direct = container.get(target)
+    if direct is not None:
+        return direct
+    target_cf = target.casefold()
+    for k, v in container.items():
+        if str(k).strip().casefold() == target_cf:
+            return v
+    return None
+
+
 def _first_field_from_data_and_mappable(
     keys: Tuple[str, ...],
     data: Dict[str, Any],
