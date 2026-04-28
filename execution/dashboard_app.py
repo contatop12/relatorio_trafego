@@ -275,17 +275,17 @@ def _is_valid_site_codi_id(value: str) -> bool:
 def _validate_client(client: Dict[str, Any]) -> Dict[str, Any]:
     ad_account_id = str(client.get("ad_account_id", "")).strip()
     group_id = str(client.get("group_id", "")).strip()
-    lead_group_id = str(client.get("lead_group_id", "")).strip()
+    lead_group_id = str(client.get("group_id", "")).strip()
     page_id = str(client.get("meta_page_id", "")).strip()
     enabled = bool(client.get("enabled", True))
 
     ad_ok = bool(re.fullmatch(r"act_\d{6,}", ad_account_id))
     group_ok = bool(re.fullmatch(r"\d+@g\.us", group_id))
-    lead_group_ok = (not lead_group_id) or bool(re.fullmatch(r"\d+@g\.us", lead_group_id))
+    lead_group_ok = bool(re.fullmatch(r"\d+@g\.us", lead_group_id))
     p12_g = str(client.get("p12_report_group_id", "")).strip()
     p12_ok = (not p12_g) or bool(re.fullmatch(r"\d+@g\.us", p12_g))
     int_g = str(client.get("internal_notify_group_id", "")).strip()
-    int_ok = (not int_g) or bool(re.fullmatch(r"\d+@g\.us", int_g))
+    int_ok = bool(re.fullmatch(r"\d+@g\.us", int_g))
     page_ok = (not page_id) or page_id.isdigit()
     ready_for_report = enabled and ad_ok and group_ok
     ready_for_lead_route = enabled and bool(page_id) and lead_group_ok
@@ -328,7 +328,7 @@ def _validate_google_client(client: Dict[str, Any]) -> Dict[str, Any]:
     p12_g = str(client.get("p12_report_group_id", "")).strip()
     p12_ok = (not p12_g) or bool(re.fullmatch(r"\d+@g\.us", p12_g))
     int_g = str(client.get("internal_notify_group_id", "")).strip()
-    int_ok = (not int_g) or bool(re.fullmatch(r"\d+@g\.us", int_g))
+    int_ok = bool(re.fullmatch(r"\d+@g\.us", int_g))
     if not enabled:
         status = "Pausado"
     elif cid_ok and group_ok:
@@ -466,7 +466,7 @@ def _build_site_lead_routes_response() -> Dict[str, Any]:
 def _simulate_webhook_flow(client: Dict[str, Any], scenario: str = "success") -> None:
     name = client.get("client_name", "Cliente")
     page_id = client.get("meta_page_id", "")
-    group_id = client.get("lead_group_id") or client.get("group_id") or ""
+    group_id = client.get("group_id") or ""
     stages: List[Tuple[str, str, str, float]] = [
         ("RECEBIDO", "info", "Webhook recebido no endpoint /meta-new-lead", 0.6),
         ("PAYLOAD_OK", "ok", "Payload validado e normalizado", 0.6),
@@ -959,7 +959,7 @@ def api_add_client() -> Any:
     ad_account_id = _normalize_act_id(str(payload.get("ad_account_id", "")).strip())
     group_id = str(payload.get("group_id", "")).strip()
     meta_page_id = str(payload.get("meta_page_id", "")).strip()
-    lead_group_id = str(payload.get("lead_group_id", "")).strip()
+    lead_group_id = group_id
     lead_phone_number = str(payload.get("lead_phone_number", "")).strip()
     lead_template = str(payload.get("lead_template", "default")).strip() or "default"
     lead_exclude_fields = _csv_list(payload.get("lead_exclude_fields"))
@@ -973,13 +973,21 @@ def api_add_client() -> Any:
         return jsonify({"ok": False, "error": "ad_account_id_obrigatorio"}), 400
     if not group_id:
         return jsonify({"ok": False, "error": "group_id_obrigatorio"}), 400
+    if not str(payload.get("lead_phone_number", "")).strip():
+        return jsonify({"ok": False, "error": "telefone_cliente_obrigatorio"}), 400
+    if not str(payload.get("internal_notify_group_id", "")).strip():
+        return jsonify({"ok": False, "error": "internal_notify_group_id_obrigatorio"}), 400
+    if not lead_phone_number:
+        return jsonify({"ok": False, "error": "telefone_cliente_obrigatorio"}), 400
+    if not str(payload.get("internal_notify_group_id", "")).strip():
+        return jsonify({"ok": False, "error": "internal_notify_group_id_obrigatorio"}), 400
 
     new_client = {
         "client_name": client_name,
         "ad_account_id": ad_account_id,
         "group_id": group_id,
         "meta_page_id": meta_page_id,
-        "lead_group_id": lead_group_id,
+        "lead_group_id": group_id,
         "lead_phone_number": lead_phone_number,
         "lead_template": lead_template,
         "lead_exclude_fields": lead_exclude_fields,
@@ -1041,7 +1049,6 @@ def api_update_client(client_id: int) -> Any:
         "ad_account_id",
         "group_id",
         "meta_page_id",
-        "lead_group_id",
         "lead_phone_number",
         "lead_template",
         "lead_exclude_fields",
@@ -1066,6 +1073,15 @@ def api_update_client(client_id: int) -> Any:
             current[key] = _csv_list(payload[key])
         else:
             current[key] = str(payload[key]).strip()
+    if not str(current.get("lead_phone_number", "")).strip():
+        return jsonify({"ok": False, "error": "telefone_cliente_obrigatorio"}), 400
+    if not str(current.get("internal_notify_group_id", "")).strip():
+        return jsonify({"ok": False, "error": "internal_notify_group_id_obrigatorio"}), 400
+    current["lead_group_id"] = str(current.get("group_id", "")).strip()
+    if not str(current.get("lead_phone_number", "")).strip():
+        return jsonify({"ok": False, "error": "telefone_cliente_obrigatorio"}), 400
+    if not str(current.get("internal_notify_group_id", "")).strip():
+        return jsonify({"ok": False, "error": "internal_notify_group_id_obrigatorio"}), 400
 
     if persistence.db_enabled():
         persistence.update_meta_client(client_id, current)
@@ -1245,7 +1261,7 @@ def api_add_site_lead_route() -> Any:
         "target_type": str(payload.get("target_type", "meta")).strip().lower() or "meta",
         "target_client_name": str(payload.get("target_client_name", "")).strip(),
         "group_id": str(payload.get("group_id", "")).strip(),
-        "lead_group_id": str(payload.get("lead_group_id", "")).strip(),
+        "lead_group_id": str(payload.get("group_id", "")).strip(),
         "lead_phone_number": str(payload.get("lead_phone_number", "")).strip(),
         "internal_notify_group_id": str(payload.get("internal_notify_group_id", "")).strip(),
         "source_type": str(payload.get("source_type", "")).strip().lower(),
@@ -1264,6 +1280,10 @@ def api_add_site_lead_route() -> Any:
         return jsonify({"ok": False, "error": "target_client_name_obrigatorio"}), 400
     if not route_data["group_id"]:
         return jsonify({"ok": False, "error": "group_id_obrigatorio"}), 400
+    if not route_data["lead_phone_number"]:
+        return jsonify({"ok": False, "error": "telefone_cliente_obrigatorio"}), 400
+    if not route_data["internal_notify_group_id"]:
+        return jsonify({"ok": False, "error": "internal_notify_group_id_obrigatorio"}), 400
     try:
         if persistence.db_enabled():
             persistence.ensure_db_ready()
@@ -1310,7 +1330,6 @@ def api_update_site_lead_route(route_id: int) -> Any:
         "target_type",
         "target_client_name",
         "group_id",
-        "lead_group_id",
         "lead_phone_number",
         "internal_notify_group_id",
         "source_type",
@@ -1343,6 +1362,11 @@ def api_update_site_lead_route(route_id: int) -> Any:
         return jsonify({"ok": False, "error": "target_client_name_obrigatorio"}), 400
     if not str(current.get("group_id", "")).strip():
         return jsonify({"ok": False, "error": "group_id_obrigatorio"}), 400
+    current["lead_group_id"] = str(current.get("group_id", "")).strip()
+    if not str(current.get("lead_phone_number", "")).strip():
+        return jsonify({"ok": False, "error": "telefone_cliente_obrigatorio"}), 400
+    if not str(current.get("internal_notify_group_id", "")).strip():
+        return jsonify({"ok": False, "error": "internal_notify_group_id_obrigatorio"}), 400
     try:
         if persistence.db_enabled():
             persistence.update_site_lead_route(route_id, current)

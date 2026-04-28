@@ -98,16 +98,9 @@
                 <span class="field-hint">Páginas do Business (API) + páginas já cadastradas.</span>
               </label>
               <label>
-                Grupo leads
-                <select name="lead_group_id" class="field-select catalog-group-select" data-catalog-optional="1">
-                  <option value="">Nenhum</option>
-                </select>
-                <span class="field-hint">Mesmo catálogo; vazio usa o grupo relatório como fallback no fluxo.</span>
-              </label>
-              <label>
-                Telefone lead
-                <input name="lead_phone_number" inputmode="tel" placeholder="Opcional — wa.me extra / testes" />
-                <span class="field-hint">Usado em fluxos com envio extra para número (ex.: template Pratical Life).</span>
+                Telefone cliente
+                <input name="lead_phone_number" required inputmode="tel" placeholder="Ex.: 5511999999999" />
+                <span class="field-hint">Número do cliente para fluxos com envio extra, quando aplicável.</span>
               </label>
               <label>
                 Grupo P12 relatório
@@ -131,8 +124,8 @@
               </label>
               <label>
                 Grupo mensagem interna
-                <select name="internal_notify_group_id" class="field-select catalog-group-select" data-catalog-optional="1">
-                  <option value="">Nenhum</option>
+                <select name="internal_notify_group_id" class="field-select catalog-group-select" required data-catalog-optional="0">
+                  <option value="">— Escolher do catálogo —</option>
                 </select>
                 <span class="field-hint">Cópia opcional; o texto vem dos templates do canal <code>internal_lead</code> / <code>internal_report</code>.</span>
               </label>
@@ -284,8 +277,8 @@
                 <input name="google_template" value="default" placeholder="default / personalizado" />
               </label>
               <label>
-                Telefone lead
-                <input name="lead_phone_number" inputmode="tel" placeholder="Opcional" />
+                Telefone cliente
+                <input name="lead_phone_number" required inputmode="tel" placeholder="Ex.: 5511999999999" />
               </label>
               <label>
                 Grupo P12 relatório
@@ -309,8 +302,8 @@
               </label>
               <label>
                 Grupo mensagem interna
-                <select name="internal_notify_group_id" class="field-select catalog-group-select" data-catalog-optional="1">
-                  <option value="">Nenhum</option>
+                <select name="internal_notify_group_id" class="field-select catalog-group-select" required data-catalog-optional="0">
+                  <option value="">— Escolher do catálogo —</option>
                 </select>
                 <span class="field-hint">Aviso após envio do relatório; conteúdo no template <code>internal_report</code>.</span>
               </label>
@@ -626,30 +619,23 @@
                 </select>
               </label>
               <label>
-                Grupo envio (lead)
+                Grupo cliente
                 <select name="group_id" class="field-select catalog-group-select" required data-catalog-optional="0">
                   <option value="">— Escolher do catálogo —</option>
                 </select>
-                <span class="field-hint">Grupo que vai receber a mensagem de novo lead do site.</span>
+                <span class="field-hint">Grupo do cliente que vai receber a mensagem de novo lead do site.</span>
               </label>
               <label>
-                Grupo leads
-                <select name="lead_group_id" class="field-select catalog-group-select" data-catalog-optional="1">
-                  <option value="">Nenhum</option>
+                Telefone cliente
+                <input name="lead_phone_number" required inputmode="tel" placeholder="Ex.: 5511999999999" />
+                <span class="field-hint">Telefone do cliente para fluxos com envio extra, quando aplicável.</span>
+              </label>
+              <label>
+                Grupo mensagem interna
+                <select name="internal_notify_group_id" class="field-select catalog-group-select" required data-catalog-optional="0">
+                  <option value="">— Escolher do catálogo —</option>
                 </select>
-                <span class="field-hint">Opcional; em vazio usa o grupo de envio (lead) como fallback.</span>
-              </label>
-              <label>
-                Telefone lead
-                <input name="lead_phone_number" inputmode="tel" placeholder="Opcional — wa.me extra / testes" />
-                <span class="field-hint">Usado em fluxos com envio extra para número, quando aplicável.</span>
-              </label>
-              <label>
-                Grupo mensagem interna (novo lead)
-                <select name="internal_notify_group_id" class="field-select catalog-group-select" data-catalog-optional="1">
-                  <option value="">Nenhum</option>
-                </select>
-                <span class="field-hint">Cópia opcional para time interno no recebimento de lead.</span>
+                <span class="field-hint">Cópia para time interno no recebimento de lead.</span>
               </label>
               <label>
                 Template de mensagem
@@ -809,7 +795,7 @@
             <div><dt>Conta</dt><dd class="f-ad_account_id"></dd></div>
             <div><dt>Grupo relatório</dt><dd class="f-group_id"></dd></div>
             <div><dt>Page ID</dt><dd class="f-meta_page_id"></dd></div>
-            <div><dt>Grupo lead</dt><dd class="f-lead_group_id"></dd></div>
+            <div><dt>Telefone cliente</dt><dd class="f-lead_phone_number"></dd></div>
             <div><dt>Grupo P12</dt><dd class="f-p12_report_group_id"></dd></div>
             <div><dt>Template lead</dt><dd class="f-lead_template"></dd></div>
             <div><dt>Enabled</dt><dd class="f-enabled"></dd></div>
@@ -850,14 +836,8 @@
                 </select>
               </label>
               <label class="edit-field">
-                Grupo lead
-                <select name="lead_group_id" class="field-select catalog-group-select" data-catalog-optional="1">
-                  <option value="">Nenhum</option>
-                </select>
-              </label>
-              <label class="edit-field">
-                Telefone lead
-                <input name="lead_phone_number" inputmode="tel" placeholder="Opcional" />
+                Telefone cliente
+                <input name="lead_phone_number" required inputmode="tel" placeholder="Ex.: 5511999999999" />
               </label>
               <label class="edit-field">
                 Grupo P12 relatório
@@ -877,8 +857,8 @@
               </label>
               <label class="edit-field">
                 Grupo mensagem interna
-                <select name="internal_notify_group_id" class="field-select catalog-group-select" data-catalog-optional="1">
-                  <option value="">Nenhum</option>
+                <select name="internal_notify_group_id" class="field-select catalog-group-select" required data-catalog-optional="0">
+                  <option value="">— Escolher do catálogo —</option>
                 </select>
               </label>
               <label class="edit-field">
@@ -1055,8 +1035,8 @@
                 <input name="google_template" />
               </label>
               <label class="edit-field">
-                Telefone lead
-                <input name="lead_phone_number" inputmode="tel" placeholder="Opcional" />
+                Telefone cliente
+                <input name="lead_phone_number" required inputmode="tel" placeholder="Ex.: 5511999999999" />
               </label>
               <label class="edit-field">
                 Grupo P12 relatório
@@ -1078,8 +1058,8 @@
               </label>
               <label class="edit-field">
                 Grupo mensagem interna
-                <select name="internal_notify_group_id" class="field-select catalog-group-select" data-catalog-optional="1">
-                  <option value="">Nenhum</option>
+                <select name="internal_notify_group_id" class="field-select catalog-group-select" required data-catalog-optional="0">
+                  <option value="">— Escolher do catálogo —</option>
                 </select>
               </label>
               <label class="edit-field">

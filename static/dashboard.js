@@ -893,7 +893,8 @@ function renderMetaClients() {
     card.querySelector(".f-ad_account_id").textContent = client.ad_account_id || "-";
     card.querySelector(".f-group_id").textContent = client.group_id || "-";
     card.querySelector(".f-meta_page_id").textContent = client.meta_page_id || "(vazio)";
-    card.querySelector(".f-lead_group_id").textContent = client.lead_group_id || "(fallback group_id)";
+    const fPhone = card.querySelector(".f-lead_phone_number");
+    if (fPhone) fPhone.textContent = client.lead_phone_number || "—";
     const fP12 = card.querySelector(".f-p12_report_group_id");
     if (fP12) fP12.textContent = client.p12_report_group_id || "—";
     const fInt = card.querySelector(".f-internal_short");
@@ -905,7 +906,7 @@ function renderMetaClients() {
     checks.appendChild(checkPill("ad_account_id", !!client.checks?.ad_account_ok));
     checks.appendChild(checkPill("group_id", !!client.checks?.group_id_ok));
     checks.appendChild(checkPill("meta_page_id", !!client.checks?.meta_page_id_ok));
-    checks.appendChild(checkPill("lead_group_id", !!client.checks?.lead_group_id_ok));
+    checks.appendChild(checkPill("telefone_cliente", !!String(client.lead_phone_number || "").trim()));
     checks.appendChild(checkPill("p12_report_group_id", !!client.checks?.p12_report_group_id_ok));
     checks.appendChild(checkPill("interno", !!client.checks?.internal_notify_group_id_ok));
 
@@ -918,7 +919,6 @@ function renderMetaClients() {
     const editFeedback = card.querySelector(".edit-feedback");
     editForm.elements.client_name.value = client.client_name || "";
     editForm.elements.group_id.value = client.group_id || "";
-    editForm.elements.lead_group_id.value = client.lead_group_id || "";
     editForm.elements.lead_phone_number.value = client.lead_phone_number || "";
     populateLeadTemplateSelect(editForm.querySelector('select[name="lead_template"]'), client.lead_template);
     editForm.elements.lead_exclude_fields.value = (client.lead_exclude_fields || []).join(", ");
@@ -1203,6 +1203,8 @@ function siteRouteChecks(route) {
   const type = String(route?.target_type || "meta").trim().toLowerCase();
   const clientName = String(route?.target_client_name || "").trim();
   const groupId = String(route?.group_id || "").trim();
+  const phone = String(route?.lead_phone_number || "").trim();
+  const internalGroupId = String(route?.internal_notify_group_id || "").trim();
   const leadTpl = String(route?.lead_template || "default").trim() || "default";
   const intTpl = String(route?.internal_lead_template || "").trim();
   const channelSite = state.templates?.channels?.site_lead || {};
@@ -1212,6 +1214,8 @@ function siteRouteChecks(route) {
     codiOk: /^\d{32}$/.test(codi),
     clientOk: hasClient,
     groupOk: /^\d+@g\.us$/.test(groupId),
+    phoneOk: phone.length > 0,
+    internalGroupOk: /^\d+@g\.us$/.test(internalGroupId),
     leadTemplateOk: !!channelSite[leadTpl],
     internalTemplateOk: !intTpl || !!channelInternal[intTpl],
   };
@@ -1236,7 +1240,6 @@ function renderSiteLeadRoutes() {
       const targetType = escHtml(r.target_type || "meta");
       const targetClient = escHtml(r.target_client_name || "");
       const groupId = escHtml(r.group_id || "");
-      const leadGroupId = escHtml(r.lead_group_id || "");
       const leadPhone = escHtml(r.lead_phone_number || "");
       const internalNotifyGroup = escHtml(r.internal_notify_group_id || "");
       const leadTemplate = escHtml(r.lead_template || "default");
@@ -1247,7 +1250,12 @@ function renderSiteLeadRoutes() {
       const statusLabel =
         !enabled
           ? "Pausado"
-          : checks.codiOk && checks.clientOk && checks.groupOk && checks.leadTemplateOk
+          : checks.codiOk &&
+              checks.clientOk &&
+              checks.groupOk &&
+              checks.phoneOk &&
+              checks.internalGroupOk &&
+              checks.leadTemplateOk
             ? "Ativo completo"
             : "Inconsistente";
       const statusClass = statusPillClass(statusLabel);
@@ -1271,9 +1279,8 @@ function renderSiteLeadRoutes() {
           <dl class="meta-grid">
             <div><dt>CODI ID</dt><dd><code>${formId}</code></dd></div>
             <div><dt>Tipo</dt><dd>${targetType}</dd></div>
-            <div><dt>Grupo envio</dt><dd>${groupId || "—"}</dd></div>
-            <div><dt>Grupo leads</dt><dd>${leadGroupId || "fallback group_id"}</dd></div>
-            <div><dt>Telefone lead</dt><dd>${leadPhone || "—"}</dd></div>
+            <div><dt>Grupo cliente</dt><dd>${groupId || "—"}</dd></div>
+            <div><dt>Telefone cliente</dt><dd>${leadPhone || "—"}</dd></div>
             <div><dt>Grupo msg interna</dt><dd>${internalNotifyGroup || "—"}</dd></div>
             <div><dt>Template site</dt><dd>${leadTemplate}</dd></div>
             <div><dt>Template interno</dt><dd>${internalLeadTemplate || "Nenhum"}</dd></div>
@@ -1284,6 +1291,8 @@ function renderSiteLeadRoutes() {
             <span class="check-pill ${checks.codiOk ? "ok" : "error"}">${checks.codiOk ? "OK" : "ERRO"} · codi_id</span>
             <span class="check-pill ${checks.clientOk ? "ok" : "error"}">${checks.clientOk ? "OK" : "ERRO"} · cliente</span>
             <span class="check-pill ${checks.groupOk ? "ok" : "error"}">${checks.groupOk ? "OK" : "ERRO"} · group_id</span>
+            <span class="check-pill ${checks.phoneOk ? "ok" : "error"}">${checks.phoneOk ? "OK" : "ERRO"} · telefone_cliente</span>
+            <span class="check-pill ${checks.internalGroupOk ? "ok" : "error"}">${checks.internalGroupOk ? "OK" : "ERRO"} · grupo_interno</span>
             <span class="check-pill ${checks.leadTemplateOk ? "ok" : "error"}">${checks.leadTemplateOk ? "OK" : "ERRO"} · template site</span>
             <span class="check-pill ${checks.internalTemplateOk ? "ok" : "error"}">${checks.internalTemplateOk ? "OK" : "ERRO"} · template interno</span>
           </div>
@@ -1316,25 +1325,19 @@ function renderSiteLeadRoutes() {
                 <select name="target_client_name" class="field-select" required></select>
               </label>
               <label class="edit-field">
-                Grupo envio (lead)
+                Grupo cliente
                 <select name="group_id" class="field-select catalog-group-select" required data-catalog-optional="0">
                   <option value="">— Escolher do catálogo —</option>
                 </select>
               </label>
               <label class="edit-field">
-                Grupo leads
-                <select name="lead_group_id" class="field-select catalog-group-select" data-catalog-optional="1">
-                  <option value="">Nenhum</option>
-                </select>
+                Telefone cliente
+                <input name="lead_phone_number" required inputmode="tel" placeholder="Ex.: 5511999999999" />
               </label>
               <label class="edit-field">
-                Telefone lead
-                <input name="lead_phone_number" inputmode="tel" placeholder="Opcional" />
-              </label>
-              <label class="edit-field">
-                Grupo mensagem interna (novo lead)
-                <select name="internal_notify_group_id" class="field-select catalog-group-select" data-catalog-optional="1">
-                  <option value="">Nenhum</option>
+                Grupo mensagem interna
+                <select name="internal_notify_group_id" class="field-select catalog-group-select" required data-catalog-optional="0">
+                  <option value="">— Escolher do catálogo —</option>
                 </select>
               </label>
               <label class="edit-field">
@@ -1386,7 +1389,6 @@ function renderSiteLeadRoutes() {
       route.target_client_name || ""
     );
     if (editForm.elements.group_id) editForm.elements.group_id.value = route.group_id || "";
-    if (editForm.elements.lead_group_id) editForm.elements.lead_group_id.value = route.lead_group_id || "";
     if (editForm.elements.lead_phone_number) editForm.elements.lead_phone_number.value = route.lead_phone_number || "";
     if (editForm.elements.internal_notify_group_id) {
       editForm.elements.internal_notify_group_id.value = route.internal_notify_group_id || "";
@@ -1458,7 +1460,6 @@ function fillSiteLeadRouteForm(route) {
   renderSiteTargetClientOptions(route.target_client_name || "");
   form.elements.target_client_name.value = route.target_client_name || "";
   if (form.elements.group_id) form.elements.group_id.value = route.group_id || "";
-  if (form.elements.lead_group_id) form.elements.lead_group_id.value = route.lead_group_id || "";
   if (form.elements.lead_phone_number) form.elements.lead_phone_number.value = route.lead_phone_number || "";
   if (form.elements.internal_notify_group_id) form.elements.internal_notify_group_id.value = route.internal_notify_group_id || "";
   if (form.elements.lead_template) form.elements.lead_template.value = route.lead_template || "default";
@@ -1479,7 +1480,6 @@ function resetSiteLeadRouteForm() {
   form.elements.enabled.checked = true;
   renderSiteTargetClientOptions("");
   if (form.elements.group_id) form.elements.group_id.value = "";
-  if (form.elements.lead_group_id) form.elements.lead_group_id.value = "";
   if (form.elements.lead_phone_number) form.elements.lead_phone_number.value = "";
   if (form.elements.internal_notify_group_id) form.elements.internal_notify_group_id.value = "";
   if (form.elements.lead_template) form.elements.lead_template.value = "default";
@@ -1920,7 +1920,6 @@ function syncCatalogGroupSelects() {
       const metaClient = state.metaClients.find((x) => String(x.id) === cid);
       const googleClient = state.googleClients.find((x) => String(x.id) === cid);
       if (metaClient && fieldName === "group_id") prev = String(metaClient.group_id || "").trim();
-      if (metaClient && fieldName === "lead_group_id") prev = String(metaClient.lead_group_id || "").trim();
       if (googleClient && fieldName === "group_id") prev = String(googleClient.group_id || "").trim();
     }
     const known = new Set([""]);

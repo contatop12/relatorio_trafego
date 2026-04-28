@@ -751,7 +751,7 @@ def _resolve_lead_route(page_id: str) -> Optional[Dict[str, Any]]:
         cid = str(c.get("meta_page_id", "")).strip()
         if cid != page_id:
             continue
-        group_id = str(c.get("lead_group_id") or c.get("group_id") or "").strip()
+        group_id = str(c.get("group_id") or "").strip()
         return {
             "client_name": str(c.get("client_name", "")).strip() or "Cliente",
             "group_id": group_id,
@@ -769,7 +769,7 @@ def _resolve_lead_route(page_id: str) -> Optional[Dict[str, Any]]:
 
 
 def _route_from_meta_client(c: Dict[str, Any]) -> Dict[str, Any]:
-    group_id = str(c.get("lead_group_id") or c.get("group_id") or "").strip()
+    group_id = str(c.get("group_id") or "").strip()
     return {
         "client_name": str(c.get("client_name", "")).strip() or "Cliente",
         "group_id": group_id,
@@ -884,7 +884,7 @@ def _resolve_site_lead_route(codi_id: str) -> Optional[Dict[str, Any]]:
     target_type = str(target.get("target_type", "meta")).strip().lower()
     target_name = str(target.get("target_client_name", "")).strip()
     route_group_id = str(target.get("group_id", "")).strip()
-    route_lead_group_id = str(target.get("lead_group_id", "")).strip()
+    route_group_id = str(target.get("group_id", "")).strip()
     route_lead_phone = str(target.get("lead_phone_number", "")).strip()
     route_internal_group_id = str(target.get("internal_notify_group_id", "")).strip()
     route_template = str(target.get("lead_template", "")).strip()
@@ -897,8 +897,8 @@ def _resolve_site_lead_route(codi_id: str) -> Optional[Dict[str, Any]]:
                 route = _route_from_google_client(c)
                 if route_group_id:
                     route["group_id"] = route_group_id
-                if route_lead_group_id:
-                    route["group_id"] = route_lead_group_id
+                if route_group_id:
+                    route["group_id"] = route_group_id
                 if route_lead_phone:
                     route["phone_number"] = route_lead_phone
                 if route_internal_group_id:
@@ -920,8 +920,8 @@ def _resolve_site_lead_route(codi_id: str) -> Optional[Dict[str, Any]]:
             route = _route_from_meta_client(c)
             if route_group_id:
                 route["group_id"] = route_group_id
-            if route_lead_group_id:
-                route["group_id"] = route_lead_group_id
+            if route_group_id:
+                route["group_id"] = route_group_id
             if route_lead_phone:
                 route["phone_number"] = route_lead_phone
             if route_internal_group_id:
@@ -972,7 +972,7 @@ def _resolve_legacy_lorena_route() -> Optional[Dict[str, Any]]:
         template = str(c.get("lead_template", "")).strip()
         if client_name != "Lorena Carvalho" and template != "lorena":
             continue
-        group_id = str(c.get("lead_group_id") or c.get("group_id") or "").strip()
+        group_id = str(c.get("group_id") or "").strip()
         return {
             "client_name": client_name or "Lorena Carvalho",
             "group_id": group_id,
