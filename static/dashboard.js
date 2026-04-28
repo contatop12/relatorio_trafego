@@ -592,6 +592,17 @@ function refreshInternalTemplateSelects() {
       true
     );
   });
+  const siteForm = document.getElementById("siteLeadRouteForm");
+  if (siteForm) {
+    const sLead = siteForm.querySelector('select[name="internal_lead_template"]');
+    populateChannelTemplateSelect(
+      sLead,
+      "internal_lead",
+      INTERNAL_LEAD_BUILTIN_IDS,
+      sLead?.value ?? "",
+      true
+    );
+  }
 }
 
 function refreshGoogleP12TemplateSelects() {
@@ -639,6 +650,8 @@ function refreshGoogleP12TemplateSelects() {
 function refreshLeadTemplateSelects() {
   const newSel = document.getElementById("newClientLeadTemplate");
   if (newSel) populateLeadTemplateSelect(newSel, newSel.value || "default");
+  const siteSel = document.querySelector('#siteLeadRouteForm select[name="lead_template"]');
+  if (siteSel) populateLeadTemplateSelect(siteSel, siteSel.value || "default");
 
   document.querySelectorAll('.edit-form select[name="lead_template"]').forEach((sel) => {
     const card = sel.closest(".client-card");
@@ -1173,8 +1186,8 @@ function renderSiteLeadRoutes() {
   if (!rows.length) {
     wrap.innerHTML = `<div class="catalog-empty-state" role="status">
       <div class="catalog-empty-orb" aria-hidden="true">◎</div>
-      <h3 class="catalog-empty-title">Sem rotas por codi_id</h3>
-      <p class="catalog-empty-text">Cadastre uma regra para evitar envio para cliente incorreto quando o lead vier do site.</p>
+      <h3 class="catalog-empty-title">Sem clientes por codi_id</h3>
+      <p class="catalog-empty-text">Cadastre cliente e templates para evitar envio errado quando o lead vier do site.</p>
     </div>`;
     return;
   }
@@ -1184,14 +1197,15 @@ function renderSiteLeadRoutes() {
       const formId = escHtml(r.codi_id || r.form_id || "");
       const targetType = escHtml(r.target_type || "meta");
       const targetClient = escHtml(r.target_client_name || "");
-      const sourceType = escHtml(r.source_type || "");
+      const leadTemplate = escHtml(r.lead_template || "default");
+      const internalLeadTemplate = escHtml(r.internal_lead_template || "");
       const notes = escHtml(r.notes || "");
       const enabled = !!r.enabled;
       return `<article class="site-route-card" data-route-id="${id}">
         <div class="site-route-main">
           <h3><code>${formId}</code></h3>
-          <p>Destino: <strong>${targetType}</strong> · ${targetClient}</p>
-          <p>Origem esperada: ${sourceType || "qualquer"}</p>
+          <p>Cliente: <strong>${targetType}</strong> · ${targetClient}</p>
+          <p>Template: <strong>${leadTemplate}</strong>${internalLeadTemplate ? ` · Interno: <strong>${internalLeadTemplate}</strong>` : ""}</p>
           ${notes ? `<p class="site-route-notes">${notes}</p>` : ""}
         </div>
         <div class="site-route-actions">
@@ -1230,7 +1244,7 @@ function renderSiteLeadRoutes() {
       const card = btn.closest(".site-route-card");
       const routeId = Number(card?.dataset.routeId || 0);
       if (!routeId) return;
-      const ok = window.confirm("Remover esta rota por codi_id?");
+      const ok = window.confirm("Remover este cadastro por codi_id?");
       if (!ok) return;
       const res = await dashFetch(apiUrl(`/api/site-lead-routes/${routeId}`), { method: "DELETE" });
       const body = await res.json().catch(() => ({}));
@@ -1239,7 +1253,7 @@ function renderSiteLeadRoutes() {
         if (fb) fb.textContent = `Erro: ${body.error || "nao foi possível remover"}`;
         return;
       }
-      if (fb) fb.textContent = "Rota removida com sucesso.";
+      if (fb) fb.textContent = "Cadastro removido com sucesso.";
       await fetchSiteLeadRoutes();
     });
   });
@@ -1253,11 +1267,14 @@ function fillSiteLeadRouteForm(route) {
   form.elements.target_type.value = route.target_type || "meta";
   renderSiteTargetClientOptions(route.target_client_name || "");
   form.elements.target_client_name.value = route.target_client_name || "";
-  form.elements.source_type.value = route.source_type || "";
+  if (form.elements.lead_template) form.elements.lead_template.value = route.lead_template || "default";
+  if (form.elements.internal_lead_template) {
+    form.elements.internal_lead_template.value = route.internal_lead_template || "";
+  }
   form.elements.notes.value = route.notes || "";
   form.elements.enabled.checked = !!route.enabled;
   const submitBtn = form.querySelector('button[type="submit"]');
-  if (submitBtn) submitBtn.textContent = "Atualizar rota";
+  if (submitBtn) submitBtn.textContent = "Atualizar cliente do site";
 }
 
 function resetSiteLeadRouteForm() {
@@ -1267,8 +1284,10 @@ function resetSiteLeadRouteForm() {
   form.dataset.editId = "";
   form.elements.enabled.checked = true;
   renderSiteTargetClientOptions("");
+  if (form.elements.lead_template) form.elements.lead_template.value = "default";
+  if (form.elements.internal_lead_template) form.elements.internal_lead_template.value = "";
   const submitBtn = form.querySelector('button[type="submit"]');
-  if (submitBtn) submitBtn.textContent = "Salvar rota";
+  if (submitBtn) submitBtn.textContent = "Salvar cliente do site";
 }
 
 async function fetchSiteLeadRoutes() {
@@ -1281,7 +1300,7 @@ async function fetchSiteLeadRoutes() {
 
 async function saveSiteLeadRoute(payload, routeId = null) {
   const fb = document.getElementById("siteLeadRouteFeedback");
-  if (fb) fb.textContent = routeId ? "Atualizando rota..." : "Salvando rota...";
+  if (fb) fb.textContent = routeId ? "Atualizando cliente do site..." : "Salvando cliente do site...";
   const url = routeId ? apiUrl(`/api/site-lead-routes/${routeId}`) : apiUrl("/api/site-lead-routes");
   const method = routeId ? "PUT" : "POST";
   const res = await dashFetch(url, {
@@ -1291,10 +1310,10 @@ async function saveSiteLeadRoute(payload, routeId = null) {
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok || !body.ok) {
-    if (fb) fb.textContent = `Erro: ${body.error || "nao foi possível salvar rota"}`;
+    if (fb) fb.textContent = `Erro: ${body.error || "nao foi possível salvar cadastro"}`;
     return false;
   }
-  if (fb) fb.textContent = routeId ? "Rota atualizada com sucesso." : "Rota cadastrada com sucesso.";
+  if (fb) fb.textContent = routeId ? "Cadastro atualizado com sucesso." : "Cadastro criado com sucesso.";
   await fetchSiteLeadRoutes();
   resetSiteLeadRouteForm();
   return true;

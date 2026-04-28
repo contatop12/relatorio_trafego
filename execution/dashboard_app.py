@@ -444,6 +444,8 @@ def _public_site_lead_route_payload(raw: Dict[str, Any]) -> Dict[str, Any]:
         "target_type": target_type,
         "target_client_name": str(raw.get("target_client_name", "")).strip(),
         "source_type": str(raw.get("source_type", "")).strip().lower(),
+        "lead_template": str(raw.get("lead_template", "")).strip() or "default",
+        "internal_lead_template": str(raw.get("internal_lead_template", "")).strip(),
         "enabled": bool(raw.get("enabled", True)),
         "notes": str(raw.get("notes", "")).strip(),
     }
@@ -1239,6 +1241,8 @@ def api_add_site_lead_route() -> Any:
         "target_type": str(payload.get("target_type", "meta")).strip().lower() or "meta",
         "target_client_name": str(payload.get("target_client_name", "")).strip(),
         "source_type": str(payload.get("source_type", "")).strip().lower(),
+        "lead_template": str(payload.get("lead_template", "")).strip() or "default",
+        "internal_lead_template": str(payload.get("internal_lead_template", "")).strip(),
         "enabled": _as_bool(payload.get("enabled"), default=True),
         "notes": str(payload.get("notes", "")).strip(),
     }
@@ -1273,7 +1277,7 @@ def api_add_site_lead_route() -> Any:
         source="dashboard_app",
         stage="SITE_ROUTE_ADICIONADA",
         status="ok",
-        detail=f"Rota de lead site adicionada ({route_data['codi_id']})",
+        detail=f"Cadastro lead site adicionado ({route_data['codi_id']})",
         payload={"codi_id": route_data["codi_id"], "target_type": route_data["target_type"]},
     )
     return jsonify({"ok": True, "route": _public_site_lead_route_payload(fresh or {**route_data, "id": new_id})})
@@ -1290,7 +1294,17 @@ def api_update_site_lead_route(route_id: int) -> Any:
     if not current:
         return jsonify({"ok": False, "error": "route_nao_encontrada"}), 404
     current = dict(current)
-    updatable = {"codi_id", "form_id", "target_type", "target_client_name", "source_type", "enabled", "notes"}
+    updatable = {
+        "codi_id",
+        "form_id",
+        "target_type",
+        "target_client_name",
+        "source_type",
+        "lead_template",
+        "internal_lead_template",
+        "enabled",
+        "notes",
+    }
     for key in updatable:
         if key not in payload:
             continue
@@ -1302,6 +1316,7 @@ def api_update_site_lead_route(route_id: int) -> Any:
             current[key] = str(payload[key]).strip().lower()
         else:
             current[key] = str(payload[key]).strip()
+    current["lead_template"] = str(current.get("lead_template", "")).strip() or "default"
     if "form_id" in current and "codi_id" not in current:
         current["codi_id"] = str(current.get("form_id", "")).strip()
     if not str(current.get("codi_id", "")).strip():
@@ -1336,7 +1351,7 @@ def api_update_site_lead_route(route_id: int) -> Any:
         source="dashboard_app",
         stage="SITE_ROUTE_ATUALIZADA",
         status="info",
-        detail=f"Rota de lead site atualizada ({fresh.get('codi_id', '')})",
+        detail=f"Cadastro lead site atualizado ({fresh.get('codi_id', '')})",
         payload={"route_id": route_id},
     )
     return jsonify({"ok": True, "route": _public_site_lead_route_payload(fresh)})

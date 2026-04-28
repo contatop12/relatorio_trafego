@@ -883,12 +883,18 @@ def _resolve_site_lead_route(codi_id: str) -> Optional[Dict[str, Any]]:
         return None
     target_type = str(target.get("target_type", "meta")).strip().lower()
     target_name = str(target.get("target_client_name", "")).strip()
+    route_template = str(target.get("lead_template", "")).strip()
+    route_internal_tpl = str(target.get("internal_lead_template", "")).strip()
     if target_type == "google":
         for c in _load_google_clients():
             if c.get("enabled", True) is False:
                 continue
             if str(c.get("client_name", "")).strip() == target_name:
                 route = _route_from_google_client(c)
+                if route_template:
+                    route["template"] = route_template
+                if route_internal_tpl:
+                    route["internal_lead_template"] = route_internal_tpl
                 route["route_origin"] = "site_codi_id"
                 route["site_codi_id"] = cid
                 route["route_target_type"] = "google"
@@ -899,6 +905,10 @@ def _resolve_site_lead_route(codi_id: str) -> Optional[Dict[str, Any]]:
             continue
         if str(c.get("client_name", "")).strip() == target_name:
             route = _route_from_meta_client(c)
+            if route_template:
+                route["template"] = route_template
+            if route_internal_tpl:
+                route["internal_lead_template"] = route_internal_tpl
             route["route_origin"] = "site_codi_id"
             route["site_codi_id"] = cid
             route["route_target_type"] = "meta"
