@@ -1322,6 +1322,45 @@ function renderSiteLeadRoutes() {
                 <input name="notes" placeholder="Opcional" />
               </label>
             </div>
+            <div class="new-client-filters">
+              <div class="filters-block-head">
+                <div class="filters-block-head-text">
+                  <h3 class="new-client-filters-title">Filtros do bloco "Formulário" (Leads Site)</h3>
+                  <p class="new-client-filters-desc">
+                    Remove linhas de <code>{{respostas}}</code> pelo nome do campo.
+                  </p>
+                </div>
+              </div>
+              <div class="new-client-filters-grid">
+                <label>
+                  Excluir perguntas (nome exato)
+                  <span class="field-micro">Igual ao nome/chave da pergunta (ignora maiúsculas).</span>
+                  <div class="chips-control" data-chip-for="lead_exclude_fields">
+                    <div class="chips-list"></div>
+                    <input type="text" class="chips-entry" placeholder="Palavra-chave e Enter" />
+                  </div>
+                  <input type="hidden" name="lead_exclude_fields" />
+                </label>
+                <label>
+                  Excluir se o nome contiver
+                  <span class="field-micro">Se o nome da pergunta contiver este trecho.</span>
+                  <div class="chips-control" data-chip-for="lead_exclude_contains">
+                    <div class="chips-list"></div>
+                    <input type="text" class="chips-entry" placeholder="Palavra-chave e Enter" />
+                  </div>
+                  <input type="hidden" name="lead_exclude_contains" />
+                </label>
+                <label>
+                  Excluir por regex
+                  <span class="field-micro">Regex sobre o nome; inválida é ignorada no envio.</span>
+                  <div class="chips-control" data-chip-for="lead_exclude_regex">
+                    <div class="chips-list"></div>
+                    <input type="text" class="chips-entry" placeholder="Regex e Enter" />
+                  </div>
+                  <input type="hidden" name="lead_exclude_regex" />
+                </label>
+              </div>
+            </div>
             <div class="edit-bar">
               <label class="check edit-check">
                 <input type="checkbox" name="enabled" />
@@ -1376,6 +1415,16 @@ function renderSiteLeadRoutes() {
         true
       );
     }
+    if (editForm.elements.lead_exclude_fields) {
+      editForm.elements.lead_exclude_fields.value = (route.lead_exclude_fields || []).join(", ");
+    }
+    if (editForm.elements.lead_exclude_contains) {
+      editForm.elements.lead_exclude_contains.value = (route.lead_exclude_contains || []).join(", ");
+    }
+    if (editForm.elements.lead_exclude_regex) {
+      editForm.elements.lead_exclude_regex.value = (route.lead_exclude_regex || []).join(", ");
+    }
+    setupChipFields(editForm, ["lead_exclude_fields", "lead_exclude_contains", "lead_exclude_regex"]);
     editForm.elements.notes.value = route.notes || "";
     editForm.elements.enabled.checked = !!route.enabled;
 
@@ -1403,6 +1452,11 @@ function renderSiteLeadRoutes() {
 
     editForm.addEventListener("submit", async (ev) => {
       ev.preventDefault();
+      const badRx = invalidRegexPatterns(editForm.querySelector('input[name="lead_exclude_regex"]'));
+      if (badRx.length) {
+        if (feedback) feedback.textContent = `Corrija a(s) regex inválida(s): ${badRx.join(", ")}`;
+        return;
+      }
       if (feedback) feedback.textContent = "Salvando alterações...";
       const fd = new FormData(editForm);
       const payload = Object.fromEntries(fd.entries());
@@ -1442,6 +1496,11 @@ function fillSiteLeadRouteForm(route) {
   if (form.elements.internal_lead_template) {
     form.elements.internal_lead_template.value = route.internal_lead_template || "";
   }
+  if (form.elements.lead_exclude_fields) form.elements.lead_exclude_fields.value = (route.lead_exclude_fields || []).join(", ");
+  if (form.elements.lead_exclude_contains)
+    form.elements.lead_exclude_contains.value = (route.lead_exclude_contains || []).join(", ");
+  if (form.elements.lead_exclude_regex) form.elements.lead_exclude_regex.value = (route.lead_exclude_regex || []).join(", ");
+  setupChipFields(form, ["lead_exclude_fields", "lead_exclude_contains", "lead_exclude_regex"]);
   form.elements.notes.value = route.notes || "";
   form.elements.enabled.checked = !!route.enabled;
   const submitBtn = form.querySelector('button[type="submit"]');
@@ -1467,6 +1526,10 @@ function resetSiteLeadRouteForm() {
   }
   if (form.elements.lead_template) form.elements.lead_template.value = "default";
   if (form.elements.internal_lead_template) form.elements.internal_lead_template.value = "";
+  if (form.elements.lead_exclude_fields) form.elements.lead_exclude_fields.value = "";
+  if (form.elements.lead_exclude_contains) form.elements.lead_exclude_contains.value = "";
+  if (form.elements.lead_exclude_regex) form.elements.lead_exclude_regex.value = "";
+  setupChipFields(form, ["lead_exclude_fields", "lead_exclude_contains", "lead_exclude_regex"]);
   const submitBtn = form.querySelector('button[type="submit"]');
   if (submitBtn) submitBtn.textContent = "Salvar cliente do site";
 }
@@ -1503,6 +1566,12 @@ async function saveSiteLeadRoute(payload, routeId = null) {
 async function submitSiteLeadRoute(ev) {
   ev.preventDefault();
   const form = ev.currentTarget;
+  const badRx = invalidRegexPatterns(form.querySelector('input[name="lead_exclude_regex"]'));
+  if (badRx.length) {
+    const fb = document.getElementById("siteLeadRouteFeedback");
+    if (fb) fb.textContent = `Corrija a(s) regex inválida(s): ${badRx.join(", ")}`;
+    return;
+  }
   const fd = new FormData(form);
   const payload = Object.fromEntries(fd.entries());
   payload.enabled = !!fd.get("enabled");
@@ -2189,6 +2258,11 @@ function bindUI() {
   document.getElementById("previewBtn").addEventListener("click", generateTemplatePreview);
   document.getElementById("tplChannel").addEventListener("change", (ev) => renderTemplateVariables(ev.target.value));
   document.getElementById("siteLeadRouteForm")?.addEventListener("submit", submitSiteLeadRoute);
+  setupChipFields(document.getElementById("siteLeadRouteForm"), [
+    "lead_exclude_fields",
+    "lead_exclude_contains",
+    "lead_exclude_regex",
+  ]);
   document.getElementById("refreshSiteRoutesBtn")?.addEventListener("click", () =>
     fetchSiteLeadRoutes().catch((e) => console.error(e)),
   );

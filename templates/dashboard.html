@@ -653,6 +653,46 @@
                 <input name="notes" placeholder="Opcional" />
               </label>
             </div>
+            <div class="new-client-filters">
+              <div class="filters-block-head">
+                <div class="filters-block-head-text">
+                  <h3 class="new-client-filters-title">Filtros do bloco "Formulário" (Leads Site)</h3>
+                  <p class="new-client-filters-desc">
+                    Remove linhas do texto enviado em <code>{{respostas}}</code>. As regras aplicam ao nome do campo.
+                    Use Enter para cada tag.
+                  </p>
+                </div>
+              </div>
+              <div class="new-client-filters-grid">
+                <label>
+                  Excluir perguntas (nome exato)
+                  <span class="field-micro">Igual ao nome/chave da pergunta (ignora maiúsculas).</span>
+                  <div class="chips-control" data-chip-for="lead_exclude_fields">
+                    <div class="chips-list"></div>
+                    <input type="text" class="chips-entry" placeholder="Palavra-chave e Enter" />
+                  </div>
+                  <input type="hidden" name="lead_exclude_fields" />
+                </label>
+                <label>
+                  Excluir se o nome contiver
+                  <span class="field-micro">Se o nome da pergunta contiver este trecho.</span>
+                  <div class="chips-control" data-chip-for="lead_exclude_contains">
+                    <div class="chips-list"></div>
+                    <input type="text" class="chips-entry" placeholder="Palavra-chave e Enter" />
+                  </div>
+                  <input type="hidden" name="lead_exclude_contains" />
+                </label>
+                <label>
+                  Excluir por regex
+                  <span class="field-micro">Regex sobre o nome; inválida é ignorada no envio.</span>
+                  <div class="chips-control" data-chip-for="lead_exclude_regex">
+                    <div class="chips-list"></div>
+                    <input type="text" class="chips-entry" placeholder="Regex e Enter" />
+                  </div>
+                  <input type="hidden" name="lead_exclude_regex" />
+                </label>
+              </div>
+            </div>
             <div class="new-client-actions">
               <label class="check">
                 <input type="checkbox" name="enabled" checked />

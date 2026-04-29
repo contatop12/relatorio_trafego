@@ -450,6 +450,11 @@ def _migrate_db_schema() -> None:
           source_type text NOT NULL DEFAULT '',
           lead_template text NOT NULL DEFAULT 'default',
           internal_lead_template text NOT NULL DEFAULT '',
+          lead_exclude_fields jsonb NOT NULL DEFAULT '[]'::jsonb,
+          lead_exclude_contains jsonb NOT NULL DEFAULT '[]'::jsonb,
+          lead_exclude_regex jsonb NOT NULL DEFAULT '[]'::jsonb,
+          origem_anuncio text NOT NULL DEFAULT '',
+          cliente_origem text NOT NULL DEFAULT '',
           enabled boolean NOT NULL DEFAULT true,
           notes text NOT NULL DEFAULT '',
           created_at timestamptz NOT NULL DEFAULT now(),
@@ -464,6 +469,9 @@ def _migrate_db_schema() -> None:
         "ALTER TABLE site_lead_routes ADD COLUMN IF NOT EXISTS internal_notify_group_id text NOT NULL DEFAULT ''",
         "ALTER TABLE site_lead_routes ADD COLUMN IF NOT EXISTS lead_template text NOT NULL DEFAULT 'default'",
         "ALTER TABLE site_lead_routes ADD COLUMN IF NOT EXISTS internal_lead_template text NOT NULL DEFAULT ''",
+        "ALTER TABLE site_lead_routes ADD COLUMN IF NOT EXISTS lead_exclude_fields jsonb NOT NULL DEFAULT '[]'::jsonb",
+        "ALTER TABLE site_lead_routes ADD COLUMN IF NOT EXISTS lead_exclude_contains jsonb NOT NULL DEFAULT '[]'::jsonb",
+        "ALTER TABLE site_lead_routes ADD COLUMN IF NOT EXISTS lead_exclude_regex jsonb NOT NULL DEFAULT '[]'::jsonb",
         "ALTER TABLE site_lead_routes ADD COLUMN IF NOT EXISTS origem_anuncio text NOT NULL DEFAULT ''",
         "ALTER TABLE site_lead_routes ADD COLUMN IF NOT EXISTS cliente_origem text NOT NULL DEFAULT ''",
     ]
@@ -968,6 +976,9 @@ def _site_route_row(row: Dict[str, Any]) -> Dict[str, Any]:
         "source_type": str(row.get("source_type") or "").strip(),
         "origem_anuncio": str(row.get("origem_anuncio") or "").strip(),
         "cliente_origem": str(row.get("cliente_origem") or "").strip(),
+        "lead_exclude_fields": _json_list(row.get("lead_exclude_fields")),
+        "lead_exclude_contains": _json_list(row.get("lead_exclude_contains")),
+        "lead_exclude_regex": _json_list(row.get("lead_exclude_regex")),
         "lead_template": str(row.get("lead_template") or "default").strip() or "default",
         "internal_lead_template": str(row.get("internal_lead_template") or "").strip(),
         "enabled": bool(row.get("enabled", True)),
@@ -988,6 +999,7 @@ def list_site_lead_routes() -> List[Dict[str, Any]]:
                     SELECT id, form_id, target_type, target_client_name, source_type,
                            group_id, lead_group_id, lead_phone_number, internal_notify_group_id,
                            origem_anuncio, cliente_origem,
+                           lead_exclude_fields, lead_exclude_contains, lead_exclude_regex,
                            lead_template, internal_lead_template, enabled, notes
                     FROM site_lead_routes
                     ORDER BY lower(form_id) ASC, id ASC
@@ -1009,6 +1021,7 @@ def get_site_lead_route(route_id: int) -> Optional[Dict[str, Any]]:
                     SELECT id, form_id, target_type, target_client_name, source_type,
                            group_id, lead_group_id, lead_phone_number, internal_notify_group_id,
                            origem_anuncio, cliente_origem,
+                           lead_exclude_fields, lead_exclude_contains, lead_exclude_regex,
                            lead_template, internal_lead_template, enabled, notes
                     FROM site_lead_routes
                     WHERE id = %s
@@ -1038,11 +1051,13 @@ def insert_site_lead_route(data: Dict[str, Any]) -> int:
                       form_id, target_type, target_client_name, group_id, lead_group_id,
                       lead_phone_number, internal_notify_group_id, source_type,
                       origem_anuncio, cliente_origem,
+                      lead_exclude_fields, lead_exclude_contains, lead_exclude_regex,
                       lead_template, internal_lead_template, enabled, notes
                     ) VALUES (
                       %(form_id)s, %(target_type)s, %(target_client_name)s, %(group_id)s, %(lead_group_id)s,
                       %(lead_phone_number)s, %(internal_notify_group_id)s, %(source_type)s,
                       %(origem_anuncio)s, %(cliente_origem)s,
+                      %(lead_exclude_fields)s, %(lead_exclude_contains)s, %(lead_exclude_regex)s,
                       %(lead_template)s, %(internal_lead_template)s, %(enabled)s, %(notes)s
                     )
                     RETURNING id
@@ -1058,6 +1073,9 @@ def insert_site_lead_route(data: Dict[str, Any]) -> int:
                         "source_type": str(data.get("source_type") or "").strip(),
                         "origem_anuncio": str(data.get("origem_anuncio") or "").strip(),
                         "cliente_origem": str(data.get("cliente_origem") or "").strip(),
+                        "lead_exclude_fields": Json(data.get("lead_exclude_fields") or []),
+                        "lead_exclude_contains": Json(data.get("lead_exclude_contains") or []),
+                        "lead_exclude_regex": Json(data.get("lead_exclude_regex") or []),
                         "lead_template": str(data.get("lead_template") or "default").strip() or "default",
                         "internal_lead_template": str(data.get("internal_lead_template") or "").strip(),
                         "enabled": bool(data.get("enabled", True)),
@@ -1088,6 +1106,9 @@ def insert_site_lead_route(data: Dict[str, Any]) -> int:
                 "source_type": str(data.get("source_type") or "").strip(),
                 "origem_anuncio": str(data.get("origem_anuncio") or "").strip(),
                 "cliente_origem": str(data.get("cliente_origem") or "").strip(),
+                "lead_exclude_fields": _norm_str_list(data.get("lead_exclude_fields")),
+                "lead_exclude_contains": _norm_str_list(data.get("lead_exclude_contains")),
+                "lead_exclude_regex": _norm_str_list(data.get("lead_exclude_regex")),
                 "lead_template": str(data.get("lead_template") or "default").strip() or "default",
                 "internal_lead_template": str(data.get("internal_lead_template") or "").strip(),
                 "enabled": bool(data.get("enabled", True)),
@@ -1122,6 +1143,9 @@ def update_site_lead_route(route_id: int, data: Dict[str, Any]) -> None:
                       source_type = %(source_type)s,
                       origem_anuncio = %(origem_anuncio)s,
                       cliente_origem = %(cliente_origem)s,
+                      lead_exclude_fields = %(lead_exclude_fields)s,
+                      lead_exclude_contains = %(lead_exclude_contains)s,
+                      lead_exclude_regex = %(lead_exclude_regex)s,
                       lead_template = %(lead_template)s,
                       internal_lead_template = %(internal_lead_template)s,
                       enabled = %(enabled)s,
@@ -1141,6 +1165,9 @@ def update_site_lead_route(route_id: int, data: Dict[str, Any]) -> None:
                         "source_type": str(data.get("source_type") or "").strip(),
                         "origem_anuncio": str(data.get("origem_anuncio") or "").strip(),
                         "cliente_origem": str(data.get("cliente_origem") or "").strip(),
+                        "lead_exclude_fields": Json(data.get("lead_exclude_fields") or []),
+                        "lead_exclude_contains": Json(data.get("lead_exclude_contains") or []),
+                        "lead_exclude_regex": Json(data.get("lead_exclude_regex") or []),
                         "lead_template": str(data.get("lead_template") or "default").strip() or "default",
                         "internal_lead_template": str(data.get("internal_lead_template") or "").strip(),
                         "enabled": bool(data.get("enabled", True)),
@@ -1170,6 +1197,9 @@ def update_site_lead_route(route_id: int, data: Dict[str, Any]) -> None:
             "source_type": str(data.get("source_type") or "").strip(),
             "origem_anuncio": str(data.get("origem_anuncio") or "").strip(),
             "cliente_origem": str(data.get("cliente_origem") or "").strip(),
+            "lead_exclude_fields": _norm_str_list(data.get("lead_exclude_fields")),
+            "lead_exclude_contains": _norm_str_list(data.get("lead_exclude_contains")),
+            "lead_exclude_regex": _norm_str_list(data.get("lead_exclude_regex")),
             "lead_template": str(data.get("lead_template") or "default").strip() or "default",
             "internal_lead_template": str(data.get("internal_lead_template") or "").strip(),
             "enabled": bool(data.get("enabled", True)),

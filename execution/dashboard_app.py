@@ -450,6 +450,9 @@ def _public_site_lead_route_payload(raw: Dict[str, Any]) -> Dict[str, Any]:
         "source_type": str(raw.get("source_type", "")).strip().lower(),
         "origem_anuncio": str(raw.get("origem_anuncio", "")).strip(),
         "cliente_origem": str(raw.get("cliente_origem", "")).strip(),
+        "lead_exclude_fields": _csv_list(raw.get("lead_exclude_fields")),
+        "lead_exclude_contains": _csv_list(raw.get("lead_exclude_contains")),
+        "lead_exclude_regex": _csv_list(raw.get("lead_exclude_regex")),
         "lead_template": str(raw.get("lead_template", "")).strip() or "default",
         "internal_lead_template": str(raw.get("internal_lead_template", "")).strip(),
         "enabled": bool(raw.get("enabled", True)),
@@ -1269,6 +1272,9 @@ def api_add_site_lead_route() -> Any:
         "source_type": str(payload.get("source_type", "")).strip().lower(),
         "origem_anuncio": str(payload.get("origem_anuncio", "")).strip(),
         "cliente_origem": str(payload.get("cliente_origem", "")).strip(),
+        "lead_exclude_fields": _csv_list(payload.get("lead_exclude_fields")),
+        "lead_exclude_contains": _csv_list(payload.get("lead_exclude_contains")),
+        "lead_exclude_regex": _csv_list(payload.get("lead_exclude_regex")),
         "lead_template": str(payload.get("lead_template", "")).strip() or "default",
         "internal_lead_template": str(payload.get("internal_lead_template", "")).strip(),
         "enabled": _as_bool(payload.get("enabled"), default=True),
@@ -1337,6 +1343,9 @@ def api_update_site_lead_route(route_id: int) -> Any:
         "source_type",
         "origem_anuncio",
         "cliente_origem",
+        "lead_exclude_fields",
+        "lead_exclude_contains",
+        "lead_exclude_regex",
         "lead_template",
         "internal_lead_template",
         "enabled",
@@ -1351,6 +1360,8 @@ def api_update_site_lead_route(route_id: int) -> Any:
             current[key] = _as_bool(payload[key], default=True)
         elif key in {"target_type", "source_type"}:
             current[key] = str(payload[key]).strip().lower()
+        elif key in {"lead_exclude_fields", "lead_exclude_contains", "lead_exclude_regex"}:
+            current[key] = _csv_list(payload[key])
         else:
             current[key] = str(payload[key]).strip()
     current["lead_template"] = str(current.get("lead_template", "")).strip() or "default"

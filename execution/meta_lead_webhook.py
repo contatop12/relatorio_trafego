@@ -1011,9 +1011,9 @@ def _build_route_from_site_lead_target(target: Dict[str, Any], codi_id: str) -> 
         "group_id": route_group_id,
         "phone_number": str(target.get("lead_phone_number", "")).strip(),
         "template": str(target.get("lead_template", "")).strip() or "default",
-        "exclude_exact": [],
-        "exclude_contains": [],
-        "exclude_regex": [],
+        "exclude_exact": _csv_to_list(target.get("lead_exclude_fields")),
+        "exclude_contains": _csv_to_list(target.get("lead_exclude_contains")),
+        "exclude_regex": _csv_to_list(target.get("lead_exclude_regex")),
         "internal_notify_group_id": str(target.get("internal_notify_group_id", "")).strip(),
         "internal_lead_template": str(target.get("internal_lead_template", "")).strip(),
         "internal_weekly_template": "",
@@ -1359,6 +1359,17 @@ def _extract_form_name(body: Dict[str, Any]) -> str:
         form_id or "(vazio)",
         leadgen_id or "(vazio)",
     )
+    # Fallback final: quando não há nome amigável, expõe o form_id para uso em {{form_name}}.
+    fallback_form_id = _first_non_empty(
+        form_id,
+        body.get("form_id"),
+        body.get("formId"),
+        data.get("form_id"),
+        data.get("formId"),
+        _extract_native_form_id_from_body(body),
+    )
+    if fallback_form_id:
+        return str(fallback_form_id).strip()
     return "(nao informado)"
 
 
