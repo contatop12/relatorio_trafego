@@ -8,7 +8,7 @@ import json
 import os
 import re
 from copy import deepcopy
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from execution.project_paths import ensure_data_dir, message_templates_json_path
 
@@ -502,6 +502,7 @@ def get_template_content(channel: str, template_id: str) -> str:
 
 def render_internal_lead_notify(client_or_route: Dict[str, Any], context: Dict[str, Any]) -> str:
     """Template do canal internal_lead, com fallback para internal_notify_message (legado)."""
+    apply_custom_variables("internal_lead", context, resolve_payload=None)
     tid = str(client_or_route.get("internal_lead_template") or "").strip()
     if tid:
         body = get_template_content("internal_lead", tid)
@@ -515,6 +516,7 @@ def render_internal_lead_notify(client_or_route: Dict[str, Any], context: Dict[s
 
 def render_internal_weekly_notify(client: Dict[str, Any], context: Dict[str, Any]) -> str:
     """Template do canal internal_report, com fallback para internal_notify_message (legado)."""
+    apply_custom_variables("internal_report", context, resolve_payload=None)
     tid = str(client.get("internal_weekly_template") or "").strip()
     if tid:
         body = get_template_content("internal_report", tid)
@@ -681,10 +683,10 @@ def load_merged_variable_resolution() -> Dict[str, Dict[str, Dict[str, Any]]]:
     stored = raw_doc.get("variable_resolution")
     if not isinstance(stored, dict):
         return out
-    for ch in ("meta_lead", "site_lead"):
-        over = stored.get(ch)
-        if not isinstance(over, dict):
+    for ch, over in stored.items():
+        if not isinstance(ch, str) or not isinstance(over, dict):
             continue
+        bucket = out.setdefault(ch, {})
         for var_name, meta in over.items():
             if var_name not in LEAD_RESOLVABLE_SLOTS or not isinstance(meta, dict):
                 continue
@@ -692,7 +694,7 @@ def load_merged_variable_resolution() -> Dict[str, Dict[str, Dict[str, Any]]]:
             if isinstance(sk, list) and sk:
                 clean = [str(x).strip() for x in sk if str(x).strip()]
                 if clean:
-                    out[ch][var_name] = {"source_keys": clean}
+                    bucket[var_name] = {"source_keys": clean}
     return out
 
 
@@ -704,6 +706,14 @@ def resolution_channel_for_lead(template_channel: str) -> str:
     if c == "site_lead":
         return "site_lead"
     return "meta_lead"
+
+
+def custom_variables_storage_channel(template_channel: str) -> str:
+    """Bucket em `custom_variables` (não confundir com `resolution_channel_for_lead`)."""
+    c = (template_channel or "meta_lead").strip() or "meta_lead"
+    if c == "internal_lead":
+        return "meta_lead"
+    return c
 
 
 def get_effective_source_keys(channel: str, slot: str) -> Tuple[str, ...]:
@@ -721,57 +731,174 @@ def get_effective_source_keys(channel: str, slot: str) -> Tuple[str, ...]:
     return _DEFAULT_LEAD_SOURCE_KEYS.get(slot, ())
 
 
-def _validate_custom_variable_entry(item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def _forbidden_custom_var_output_key(storage_ch: str, key: str) -> bool:
+    t = TEMPLATE_VARIABLES.get(storage_ch)
+    if isinstance(t, dict) and t:
+        return key in t
+    return key in _RESERVED_LEAD_RENDER_KEYS
+
+
+def _validate_custom_variable_entry(
+    item: Dict[str, Any],
+    *,
+    storage_ch: str,
+    template_ch: str,
+    sibling_keys: Set[str],
+) -> Optional[Dict[str, Any]]:
     key = str(item.get("key", "")).strip()
     if not key or not _VAR_NAME_RE.match(key):
         return None
-    if key in _RESERVED_LEAD_RENDER_KEYS:
+    if _forbidden_custom_var_output_key(storage_ch, key):
         return None
+    src_raw = str(item.get("source", "payload") or "payload").strip().lower()
+    if src_raw not in ("payload", "context"):
+        src_raw = "payload"
     sk = item.get("source_keys")
     if not isinstance(sk, list) or not sk:
         return None
     source_keys = [str(x).strip() for x in sk if str(x).strip()]
     if not source_keys:
         return None
+    if src_raw == "context":
+        allowed = set(TEMPLATE_VARIABLES.get(template_ch, {}) or {}) | (sibling_keys - {key})
+        for ckey in source_keys:
+            if ckey not in allowed:
+                return None
     mappings = item.get("mappings")
     if mappings is None:
         mappings = {}
     if not isinstance(mappings, dict):
         return None
-    map_str = {str(k): str(v) for k, v in mappings.items()}
+    map_str = {str(kk): str(v) for kk, v in mappings.items()}
     default = str(item.get("default", ""))
     norm = item.get("normalize")
     if not isinstance(norm, dict):
         norm = {"trim": True, "lower": False}
-    return {"key": key, "source_keys": source_keys, "mappings": map_str, "default": default, "normalize": norm}
+    return {
+        "key": key,
+        "source": src_raw,
+        "source_keys": source_keys,
+        "mappings": map_str,
+        "default": default,
+        "normalize": norm,
+    }
+
+
+def _custom_vars_from_stored_list(
+    storage_ch: str,
+    template_ch: str,
+    raw_list: list,
+) -> List[Dict[str, Any]]:
+    sib: Set[str] = set()
+    for it in raw_list or []:
+        if isinstance(it, dict) and str(it.get("key", "")).strip():
+            sib.add(str(it.get("key", "")).strip())
+    out: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    for it in raw_list or []:
+        if not isinstance(it, dict):
+            continue
+        ent = _validate_custom_variable_entry(
+            it, storage_ch=storage_ch, template_ch=template_ch, sibling_keys=sib
+        )
+        if not ent or ent["key"] in seen:
+            continue
+        seen.add(ent["key"])
+        out.append(ent)
+    return out
 
 
 def load_merged_custom_variables() -> Dict[str, List[Dict[str, Any]]]:
-    out: Dict[str, List[Dict[str, Any]]] = {"meta_lead": [], "site_lead": []}
+    out: Dict[str, List[Dict[str, Any]]] = {}
     raw_doc = _load_full_templates_document()
     stored = raw_doc.get("custom_variables")
     if not isinstance(stored, dict):
+        for ch in ("meta_lead", "site_lead", "google_report", "meta_report", "internal_report"):
+            out[ch] = []
         return out
-    for ch in ("meta_lead", "site_lead"):
-        raw_list = stored.get(ch)
-        if not isinstance(raw_list, list):
+    legacy_internal: Optional[List[Any]] = None
+    for ch, raw_list in stored.items():
+        if ch == "internal_lead" and isinstance(raw_list, list):
+            legacy_internal = raw_list
             continue
-        seen: set[str] = set()
-        for item in raw_list:
-            if not isinstance(item, dict):
-                continue
-            ent = _validate_custom_variable_entry(item)
-            if not ent or ent["key"] in seen:
-                continue
-            seen.add(ent["key"])
-            out[ch].append(ent)
+        if not isinstance(ch, str) or not isinstance(raw_list, list):
+            continue
+        out[ch] = _custom_vars_from_stored_list(ch, ch, raw_list)
+    if legacy_internal is not None:
+        extra = _custom_vars_from_stored_list("meta_lead", "internal_lead", legacy_internal)
+        bucket = out.setdefault("meta_lead", [])
+        seen = {d["key"] for d in bucket}
+        for ent in extra:
+            if ent["key"] not in seen:
+                bucket.append(ent)
+                seen.add(ent["key"])
+    for ch in ("meta_lead", "site_lead", "google_report", "meta_report", "internal_report"):
+        out.setdefault(ch, [])
     return out
 
 
 def get_custom_variable_defs_for_channel(template_channel: str) -> List[Dict[str, Any]]:
-    ch = resolution_channel_for_lead(template_channel)
+    ch = custom_variables_storage_channel(template_channel)
     all_cv = load_merged_custom_variables()
     return list(all_cv.get(ch, []))
+
+
+def _context_value_to_raw_str(v: Any) -> str:
+    if v is None:
+        return ""
+    if isinstance(v, str):
+        return v.strip()
+    if isinstance(v, (int, float, bool)):
+        return str(v).strip()
+    if isinstance(v, (list, dict)):
+        return str(v).strip() if v else ""
+    return str(v).strip()
+
+
+def apply_custom_variables(
+    template_channel: str,
+    render_ctx: Dict[str, Any],
+    *,
+    resolve_payload: Optional[Callable[[Tuple[str, ...]], str]] = None,
+) -> None:
+    """Aplica definições de `custom_variables` a `render_ctx` (in-place, ordem + multi-passo).
+
+    * `source=payload` (padrão): requer `resolve_payload`; se `None` (p.ex. preview sem payload),
+      a entrada é ignorada (mantém o que já estiver no contexto, p.ex. exemplos do dashboard).
+    * `source=context`: procura a primeira chave de `source_keys` com valor não vazio no contexto.
+    """
+    defs = get_custom_variable_defs_for_channel(template_channel)
+    if not defs:
+        return
+    max_rounds = max(8, min(48, max(len(defs) * 3, 8)))
+    for _ in range(max_rounds):
+        progressed = False
+        for d in defs:
+            out_key = d["key"]
+            src = d.get("source") or "payload"
+            if src == "context":
+                raw = ""
+                for ckey in d.get("source_keys") or ():
+                    s = _context_value_to_raw_str(render_ctx.get(ckey))
+                    if s:
+                        raw = s
+                        break
+            else:
+                if resolve_payload is None:
+                    continue
+                raw = (resolve_payload(tuple(d.get("source_keys") or ())) or "").strip()
+            new_val = map_custom_variable_display(
+                raw,
+                d.get("mappings") or {},
+                default=str(d.get("default", "")),
+                normalize=d.get("normalize"),
+            )
+            prev_s = _context_value_to_raw_str(render_ctx.get(out_key)) if out_key in render_ctx else ""
+            if new_val != prev_s:
+                render_ctx[out_key] = new_val
+                progressed = True
+        if not progressed:
+            break
 
 
 def map_custom_variable_display(
@@ -805,8 +932,8 @@ def map_custom_variable_display(
 
 def upsert_variable_resolution_channel(channel: str, payload: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
     ch = (channel or "").strip()
-    if ch not in ("meta_lead", "site_lead"):
-        raise ValueError("channel_resolution_invalido")
+    if not ch:
+        raise ValueError("channel_obrigatorio")
     bucket: Dict[str, Dict[str, Any]] = {}
     for var_name, meta in (payload or {}).items():
         if var_name not in LEAD_RESOLVABLE_SLOTS:
@@ -834,14 +961,21 @@ def upsert_variable_resolution_channel(channel: str, payload: Dict[str, Any]) ->
 
 def upsert_custom_variables_channel(channel: str, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     ch = (channel or "").strip()
-    if ch not in ("meta_lead", "site_lead"):
-        raise ValueError("channel_custom_vars_invalido")
+    if not ch:
+        raise ValueError("channel_obrigatorio")
+    storage_ch = custom_variables_storage_channel(ch)
+    sibling: Set[str] = set()
+    for item in items or []:
+        if isinstance(item, dict) and str(item.get("key", "")).strip():
+            sibling.add(str(item.get("key", "")).strip())
     cleaned: List[Dict[str, Any]] = []
     seen: set[str] = set()
     for item in items or []:
         if not isinstance(item, dict):
             continue
-        ent = _validate_custom_variable_entry(item)
+        ent = _validate_custom_variable_entry(
+            item, storage_ch=storage_ch, template_ch=ch, sibling_keys=sibling
+        )
         if not ent or ent["key"] in seen:
             continue
         seen.add(ent["key"])
@@ -851,10 +985,12 @@ def upsert_custom_variables_channel(channel: str, items: List[Dict[str, Any]]) -
     cv = data.get("custom_variables")
     if not isinstance(cv, dict):
         cv = {}
-    cv[ch] = cleaned
+    cv[storage_ch] = cleaned
+    if storage_ch == "meta_lead" and "internal_lead" in cv:
+        del cv["internal_lead"]
     data["custom_variables"] = cv
     _save_full_templates_document(data)
-    return load_merged_custom_variables().get(ch, [])
+    return list(load_merged_custom_variables().get(storage_ch, []))
 
 
 def list_template_placeholder_keys(content: str) -> List[str]:

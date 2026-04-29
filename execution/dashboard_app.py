@@ -52,9 +52,12 @@ from execution.live_events import (
 )
 from execution.message_templates import (
     TEMPLATE_VARIABLES,
+    apply_custom_variables,
+    custom_variables_storage_channel,
     list_template_placeholder_keys,
     list_templates_payload,
     load_merged_custom_variables,
+    map_custom_variable_display,
     render_template_text,
     upsert_custom_variables_channel,
     upsert_filter_rules,
@@ -1458,15 +1461,10 @@ def api_upsert_message_template(channel: str, template_id: str) -> Any:
     vars_for_ch = TEMPLATE_VARIABLES.get(channel)
     if isinstance(vars_for_ch, dict):
         allowed = set(vars_for_ch.keys())
-        cv_ch = None
-        if channel in ("meta_lead", "site_lead"):
-            cv_ch = channel
-        elif channel == "internal_lead":
-            cv_ch = "meta_lead"
-        if cv_ch:
-            for ent in load_merged_custom_variables().get(cv_ch, []):
-                if isinstance(ent, dict) and ent.get("key"):
-                    allowed.add(str(ent["key"]))
+        cv_bucket = custom_variables_storage_channel(channel)
+        for ent in load_merged_custom_variables().get(cv_bucket, []):
+            if isinstance(ent, dict) and ent.get("key"):
+                allowed.add(str(ent["key"]))
         for tok in list_template_placeholder_keys(content):
             if tok not in allowed:
                 unknown_placeholders.append(tok)
@@ -1488,8 +1486,33 @@ def api_message_template_preview() -> Any:
     context = payload.get("context") or {}
     if not isinstance(context, dict):
         context = {}
-    rendered = render_template_text(content, context)
+    channel = str(payload.get("channel", "")).strip()
+    ctx = dict(context)
+    if channel:
+        apply_custom_variables(channel, ctx, resolve_payload=None)
+    rendered = render_template_text(content, ctx)
     return jsonify({"ok": True, "preview": rendered})
+
+
+@app.post("/api/message-templates/custom-variable-preview")
+def api_custom_variable_transformation_preview() -> Any:
+    """Pré-visualiza `map_custom_variable_display` com as mesmas regras do servidor."""
+    payload = request.get_json(silent=True) or {}
+    raw = str(payload.get("raw", ""))
+    mappings = payload.get("mappings") or {}
+    if not isinstance(mappings, dict):
+        return jsonify({"ok": False, "error": "mappings_invalido"}), 400
+    default = str(payload.get("default", ""))
+    norm = payload.get("normalize") or {}
+    if not isinstance(norm, dict):
+        norm = {"trim": True, "lower": False}
+    result = map_custom_variable_display(
+        raw,
+        {str(k): str(v) for k, v in mappings.items()},
+        default=default,
+        normalize=norm,
+    )
+    return jsonify({"ok": True, "result": result})
 
 
 @app.put("/api/message-filters/<channel>")

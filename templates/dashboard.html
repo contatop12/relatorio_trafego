@@ -348,9 +348,23 @@
 
       <section id="tab-templates" class="tab-panel">
         <section class="panel panel-form">
-          <div class="panel-title-wrap">
-            <h2>Templates de Mensagem</h2>
-            <p>Crie formatos com variáveis para Meta e Google.</p>
+          <div class="filters-panel-head">
+            <div class="panel-title-wrap">
+              <h2>Templates de Mensagem</h2>
+              <p>Crie formatos com variáveis para Meta e Google.</p>
+            </div>
+            <button
+              type="button"
+              class="filters-help-btn"
+              data-open="messages-section-help"
+              data-help-key="templates_form"
+              aria-haspopup="dialog"
+              aria-controls="messagesSectionHelpDialog"
+              aria-label="Ajuda: templates de mensagem"
+              title="Como funciona esta seção"
+            >
+              ?
+            </button>
           </div>
           <form id="templateForm" class="template-grid">
             <label>
@@ -404,20 +418,30 @@
         </section>
 
         <section class="panel" id="varResolutionSection">
-          <div class="panel-title-wrap">
-            <h2>Origem dos campos (webhook)</h2>
-            <p>
-              Defina a ordem de chaves do payload / formulário para cada variável de lead. Aplica-se a
-              <code>meta_lead</code> e <code>site_lead</code>.
-            </p>
+          <div class="filters-panel-head">
+            <div class="panel-title-wrap">
+              <h2>Origem dos campos (webhook)</h2>
+              <p>
+                Defina a ordem de chaves do payload / formulário para cada variável de lead no canal selecionado.
+              </p>
+            </div>
+            <button
+              type="button"
+              class="filters-help-btn"
+              data-open="messages-section-help"
+              data-help-key="variable_resolution"
+              aria-haspopup="dialog"
+              aria-controls="messagesSectionHelpDialog"
+              aria-label="Ajuda: origem dos campos"
+              title="Como funciona esta seção"
+            >
+              ?
+            </button>
           </div>
           <div class="new-client-filters-grid" style="align-items: end">
             <label>
               Canal
-              <select id="varResChannel" class="field-select">
-                <option value="meta_lead">meta_lead</option>
-                <option value="site_lead">site_lead</option>
-              </select>
+              <select id="varResChannel" class="field-select"></select>
             </label>
           </div>
           <div id="varResolutionGrid" class="var-resolution-grid" aria-live="polite"></div>
@@ -428,22 +452,37 @@
         </section>
 
         <section class="panel" id="customVarsSection">
-          <div class="panel-title-wrap">
-            <h2>Variáveis personalizadas</h2>
-            <p>
-              Crie <code>{{nome}}</code> próprio: indique as chaves de onde ler o valor e um mapa valor bruto → texto
-              exibido (ex.: código interno → nome amigável).
-            </p>
+          <div class="filters-panel-head">
+            <div class="panel-title-wrap">
+              <h2>Variáveis personalizadas</h2>
+              <p>
+                <strong>Passo 1:</strong> &quot;Origem dos campos&quot; (acima) define
+                <code>nome</code>, <code>page_path</code>, UTM, etc. <strong>Passo 2:</strong> aqui
+                cria <code>chaves</code> próprias, escolhendo a fonte — chaves do JSON de payload ou
+                variáveis já resolvidas (contexto) — e aplica mapa, normalização e ordem
+                (útil se uma variável depender de outra).
+              </p>
+            </div>
+            <button
+              type="button"
+              class="filters-help-btn"
+              data-open="messages-section-help"
+              data-help-key="custom_variables"
+              aria-haspopup="dialog"
+              aria-controls="messagesSectionHelpDialog"
+              aria-label="Ajuda: variáveis personalizadas"
+              title="Como funciona esta seção"
+            >
+              ?
+            </button>
           </div>
           <div class="new-client-filters-grid" style="align-items: end">
             <label>
               Canal
-              <select id="customVarsChannel" class="field-select">
-                <option value="meta_lead">meta_lead</option>
-                <option value="site_lead">site_lead</option>
-              </select>
+              <select id="customVarsChannel" class="field-select"></select>
             </label>
           </div>
+          <p id="customVarsChannelNote" class="field-micro" aria-live="polite"></p>
           <div id="customVarsList" class="custom-vars-list"></div>
           <div class="new-client-actions">
             <button type="button" class="ghost" id="customVarsAddBtn">Adicionar variável</button>
@@ -455,74 +494,110 @@
         <section class="panel">
           <div class="filters-panel-head">
             <div class="panel-title-wrap filters-panel-titles">
-              <h2>Filtros globais de perguntas (Meta Lead)</h2>
-              <p>Somam-se às regras por cliente; aplicam-se ao nome interno do campo.</p>
+              <h2>Filtros globais</h2>
+              <p>Somam-se às regras por cliente; aplicam-se ao nome interno do campo em cada canal.</p>
             </div>
             <button
               type="button"
               class="filters-help-btn"
-              data-open="filters-help"
+              data-open="messages-section-help"
+              data-help-key="global_filters"
               aria-haspopup="dialog"
-              aria-controls="filtersHelpDialog"
+              aria-controls="messagesSectionHelpDialog"
               aria-label="Ajuda: filtros de exclusão de perguntas"
               title="Como funcionam os filtros"
             >
               ?
             </button>
           </div>
-          <form id="filtersForm" class="filters-form">
-            <div class="new-client-filters-grid" aria-label="Regras de exclusão">
-              <label>
-                Excluir perguntas exatas (CSV)
-                <span class="field-micro">Nome exato da pergunta (ignora maiúsculas).</span>
-                <div class="chips-control" data-chip-for="exclude_exact">
-                  <div class="chips-list"></div>
-                  <input
-                    type="text"
-                    class="chips-entry"
-                    placeholder="Digite uma palavra-chave e pressione Enter"
-                  />
-                </div>
-                <input type="hidden" name="exclude_exact" />
-              </label>
-              <label>
-                Excluir se contiver (CSV)
-                <span class="field-micro">Substring no nome do campo.</span>
-                <div class="chips-control" data-chip-for="exclude_contains">
-                  <div class="chips-list"></div>
-                  <input
-                    type="text"
-                    class="chips-entry"
-                    placeholder="Digite uma palavra-chave e pressione Enter"
-                  />
-                </div>
-                <input type="hidden" name="exclude_contains" />
-              </label>
-              <label>
-                Excluir por regex (CSV)
-                <span class="field-micro">Regex sobre o nome; inválida é ignorada no envio.</span>
-                <div class="chips-control" data-chip-for="exclude_regex">
-                  <div class="chips-list"></div>
-                  <input
-                    type="text"
-                    class="chips-entry"
-                    placeholder="Digite uma regex e pressione Enter"
-                  />
-                </div>
-                <input type="hidden" name="exclude_regex" />
-              </label>
-            </div>
-            <div class="new-client-actions filters-form-actions">
-              <button type="submit" class="primary">Salvar filtros globais</button>
-            </div>
-          </form>
+          <div class="global-filters-toolbar">
+            <label class="global-filters-channel-picker">
+              Adicionar canal
+              <div class="global-filters-channel-controls">
+                <select id="filtersAddChannel" class="field-select"></select>
+                <button type="button" id="filtersAddChannelBtn" class="ghost">Adicionar</button>
+              </div>
+            </label>
+          </div>
+          <div id="globalFiltersList" class="global-filters-list" aria-live="polite"></div>
+          <div class="global-filters-summary-wrap">
+            <h3 class="global-filters-summary-title">Agrupamento de filtros globais</h3>
+            <div id="globalFiltersSummary" class="global-filters-summary"></div>
+          </div>
+          <template id="globalFilterCardTemplate">
+            <form class="filters-form global-filter-card" data-filter-channel="">
+              <div class="global-filter-card-head">
+                <h3 class="global-filter-channel-title"></h3>
+                <button type="button" class="ghost small global-filter-remove-btn">Remover canal</button>
+              </div>
+              <div class="new-client-filters-grid" aria-label="Regras de exclusão por canal">
+                <label>
+                  Excluir perguntas exatas (CSV)
+                  <span class="field-micro">Nome exato da pergunta (ignora maiúsculas).</span>
+                  <div class="chips-control" data-chip-for="exclude_exact">
+                    <div class="chips-list"></div>
+                    <input
+                      type="text"
+                      class="chips-entry"
+                      placeholder="Digite uma palavra-chave e pressione Enter"
+                    />
+                  </div>
+                  <input type="hidden" name="exclude_exact" />
+                </label>
+                <label>
+                  Excluir se contiver (CSV)
+                  <span class="field-micro">Substring no nome do campo.</span>
+                  <div class="chips-control" data-chip-for="exclude_contains">
+                    <div class="chips-list"></div>
+                    <input
+                      type="text"
+                      class="chips-entry"
+                      placeholder="Digite uma palavra-chave e pressione Enter"
+                    />
+                  </div>
+                  <input type="hidden" name="exclude_contains" />
+                </label>
+                <label>
+                  Excluir por regex (CSV)
+                  <span class="field-micro">Regex sobre o nome; inválida é ignorada no envio.</span>
+                  <div class="chips-control" data-chip-for="exclude_regex">
+                    <div class="chips-list"></div>
+                    <input
+                      type="text"
+                      class="chips-entry"
+                      placeholder="Digite uma regex e pressione Enter"
+                    />
+                  </div>
+                  <input type="hidden" name="exclude_regex" />
+                </label>
+              </div>
+              <div class="new-client-actions filters-form-actions">
+                <button type="submit" class="primary">Salvar filtros do canal</button>
+              </div>
+              <p class="feedback global-filter-feedback"></p>
+            </form>
+          </template>
           <p id="filtersFeedback" class="feedback"></p>
         </section>
 
         <section class="panel">
-          <div class="panel-title-wrap">
-            <h2>Templates cadastrados</h2>
-            <button id="refreshTemplatesBtn" class="ghost">Atualizar</button>
+          <div class="filters-panel-head">
+            <div class="panel-title-wrap">
+              <h2>Templates cadastrados</h2>
+              <button id="refreshTemplatesBtn" class="ghost">Atualizar</button>
+            </div>
+            <button
+              type="button"
+              class="filters-help-btn"
+              data-open="messages-section-help"
+              data-help-key="templates_catalog"
+              aria-haspopup="dialog"
+              aria-controls="messagesSectionHelpDialog"
+              aria-label="Ajuda: templates cadastrados"
+              title="Como funciona esta seção"
+            >
+              ?
+            </button>
           </div>
           <div id="templatesCatalog" class="templates-catalog"></div>
         </section>
@@ -774,7 +849,7 @@
       <div class="filters-help-backdrop" data-filters-help-dismiss tabindex="-1" aria-hidden="true"></div>
       <div class="filters-help-card">
         <header class="filters-help-header">
-          <h2 id="filtersHelpTitle" class="filters-help-title">Filtros de perguntas (Meta Lead)</h2>
+          <h2 id="filtersHelpTitle" class="filters-help-title">Filtros de perguntas (globais por canal)</h2>
           <button type="button" class="filters-help-close-x" data-filters-help-dismiss aria-label="Fechar diálogo">
             ×
           </button>
@@ -837,6 +912,32 @@
         </div>
         <footer class="flow-modal-footer">
           <button type="button" class="primary flow-modal-close-btn" data-flow-dismiss>Fechar</button>
+        </footer>
+      </div>
+    </div>
+
+    <div
+      id="messagesSectionHelpDialog"
+      class="filters-help-overlay"
+      hidden
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="messagesSectionHelpTitle"
+      aria-hidden="true"
+    >
+      <div class="filters-help-backdrop" data-messages-help-dismiss tabindex="-1" aria-hidden="true"></div>
+      <div class="filters-help-card">
+        <header class="filters-help-header">
+          <h2 id="messagesSectionHelpTitle" class="filters-help-title">Ajuda da seção</h2>
+          <button type="button" class="filters-help-close-x" data-messages-help-dismiss aria-label="Fechar diálogo">
+            ×
+          </button>
+        </header>
+        <div class="filters-help-body">
+          <p id="messagesSectionHelpBody" class="filters-help-lede"></p>
+        </div>
+        <footer class="filters-help-footer">
+          <button type="button" class="primary filters-help-close-btn" data-messages-help-dismiss>Fechar</button>
         </footer>
       </div>
     </div>

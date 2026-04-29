@@ -26,7 +26,12 @@ from execution.webhook_notify import (
     notify_meta_token_expirado,
 )
 from execution.project_paths import clients_json_path
-from execution.message_templates import get_template_content, render_internal_weekly_notify, render_template_text
+from execution.message_templates import (
+    apply_custom_variables,
+    get_template_content,
+    render_internal_weekly_notify,
+    render_template_text,
+)
 
 # Configuração de logging
 log_dir = os.path.join(os.path.dirname(__file__), '..', '.tmp')
@@ -46,6 +51,7 @@ logger = logging.getLogger(__name__)
 
 def _meta_p12_preview(client: Dict[str, Any], meta_report_ctx: Dict[str, Any]) -> str:
     """Texto agregado para DRY_RUN (P12 + interno)."""
+    apply_custom_variables("meta_report", meta_report_ctx, resolve_payload=None)
     parts: List[str] = []
     p12_gid = str(client.get("p12_report_group_id", "")).strip()
     t1 = str(client.get("p12_report_template", "default")).strip() or "default"
@@ -76,6 +82,7 @@ def _send_meta_p12_and_internal(
     *,
     period_label: str,
 ) -> None:
+    apply_custom_variables("meta_report", meta_report_ctx, resolve_payload=None)
     p12_gid = str(client.get("p12_report_group_id", "")).strip()
     t1 = str(client.get("p12_report_template", "default")).strip() or "default"
     t2 = str(client.get("p12_data_report_template", "")).strip()

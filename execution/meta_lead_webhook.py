@@ -30,11 +30,10 @@ from execution import dashboard_app as dashboard_module
 from execution.flask_server import serve_flask_app
 from execution.live_events import publish_event
 from execution.message_templates import (
-    get_custom_variable_defs_for_channel,
+    apply_custom_variables,
     get_effective_source_keys,
     get_filter_rules,
     get_template_content,
-    map_custom_variable_display,
     render_internal_lead_notify,
     render_template_text,
 )
@@ -1127,14 +1126,11 @@ def _inject_custom_variables_into_ctx(
     data = body.get("data") if isinstance(body.get("data"), dict) else {}
     mappable = _ensure_mappable(body, data)
     fc = str((route or {}).get("template_channel") or "meta_lead").strip() or "meta_lead"
-    for defn in get_custom_variable_defs_for_channel(fc):
-        raw = _first_field_from_data_and_mappable(tuple(defn["source_keys"]), data, mappable)
-        ctx[str(defn["key"])] = map_custom_variable_display(
-            raw,
-            defn.get("mappings") or {},
-            default=str(defn.get("default", "")),
-            normalize=defn.get("normalize"),
-        )
+
+    def _resolve_payload(keys: Tuple[str, ...]) -> str:
+        return _first_field_from_data_and_mappable(keys, data, mappable) or ""
+
+    apply_custom_variables(fc, ctx, resolve_payload=_resolve_payload)
 
 
 def _base_message_fields(body: Dict[str, Any], route: Optional[Dict[str, Any]] = None) -> Dict[str, str]:

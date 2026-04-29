@@ -23,7 +23,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from execution.data_processor import format_currency, format_number
 from execution.evolution_client import get_evolution_client
-from execution.message_templates import get_template_content, render_internal_weekly_notify, render_template_text
+from execution.message_templates import (
+    apply_custom_variables,
+    get_template_content,
+    render_internal_weekly_notify,
+    render_template_text,
+)
 from execution.project_paths import google_clients_json_path
 
 log_dir = os.path.join(os.path.dirname(__file__), "..", ".tmp")
@@ -498,19 +503,18 @@ def _build_google_report_message(
     if hidden_campaigns > 0:
         campaigns_block += f"\n\n... e mais {hidden_campaigns} campanha(s) ativa(s)."
 
+    ctx: Dict[str, Any] = {
+        "client_name": client_name,
+        "customer_id": _normalize_customer_id(customer_id),
+        "period_start_br": _date_iso_to_br(period_start),
+        "period_end_br": _date_iso_to_br(period_end),
+        "conversions_block": conversions_block,
+        "campaigns_block": campaigns_block,
+    }
+    apply_custom_variables("google_report", ctx, resolve_payload=None)
     custom_content = get_template_content("google_report", template_id)
     if custom_content:
-        return render_template_text(
-            custom_content,
-            {
-                "client_name": client_name,
-                "customer_id": _normalize_customer_id(customer_id),
-                "period_start_br": _date_iso_to_br(period_start),
-                "period_end_br": _date_iso_to_br(period_end),
-                "conversions_block": conversions_block,
-                "campaigns_block": campaigns_block,
-            },
-        )
+        return render_template_text(custom_content, ctx)
     return (
         f"*{client_name}*\n\n"
         f"📊 *Relatorio Google Ads*\n"

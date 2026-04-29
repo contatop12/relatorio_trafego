@@ -11,6 +11,7 @@ const state = {
     variable_resolution: {},
     custom_variables: {},
   },
+  activeFilterChannels: [],
   eventsByClient: new Map(),
   eventStream: null,
   metaCatalog: {
@@ -299,6 +300,104 @@ function bindFiltersHelpModal() {
   });
 }
 
+const MESSAGES_SECTION_HELP = {
+  templates_form: {
+    title: "Templates de Mensagem",
+    body:
+      "Crie e edite textos base por canal (meta, site, google, interno). O conteúdo pode usar variáveis no formato {{variavel}} e o preview ajuda a validar antes de salvar.",
+  },
+  variable_resolution: {
+    title: "Origem dos campos (webhook)",
+    body:
+      "Define a ordem de chaves que o sistema tenta ler no payload para preencher variáveis de lead como nome, email e whatsapp. Use quando o formulário de origem muda os nomes dos campos.",
+  },
+  custom_variables: {
+    title: "Variáveis personalizadas",
+    body:
+      "Permite criar novas variáveis para os templates, mapeando chaves do payload para um valor final amigável. Ideal para traduzir códigos internos em textos legíveis para a mensagem.",
+  },
+  global_filters: {
+    title: "Filtros globais",
+    body:
+      "Aplica regras por canal para remover perguntas do bloco {{respostas}} em todos os envios. Esses filtros se somam aos filtros configurados individualmente por cliente.",
+  },
+  templates_catalog: {
+    title: "Templates cadastrados",
+    body:
+      "Mostra todos os templates salvos agrupados por canal. Clique em um item para carregar no formulário de edição e atualizar rapidamente conteúdo, nome ou descrição.",
+  },
+};
+
+function bindMessagesSectionHelpModal() {
+  const dlg = document.getElementById("messagesSectionHelpDialog");
+  if (!dlg) return;
+  if (dlg.dataset.messagesHelpBound === "1") return;
+  dlg.dataset.messagesHelpBound = "1";
+  let lastFocus = null;
+
+  const titleEl = document.getElementById("messagesSectionHelpTitle");
+  const bodyEl = document.getElementById("messagesSectionHelpBody");
+
+  const trapFocus = (ev) => {
+    if (ev.key !== "Tab" || dlg.hidden) return;
+    const focusables = dlg.querySelectorAll(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+    );
+    const list = [...focusables].filter((n) => !n.hasAttribute("disabled") && n.offsetParent !== null);
+    if (!list.length) return;
+    const first = list[0];
+    const last = list[list.length - 1];
+    if (ev.shiftKey && document.activeElement === first) {
+      ev.preventDefault();
+      last.focus();
+    } else if (!ev.shiftKey && document.activeElement === last) {
+      ev.preventDefault();
+      first.focus();
+    }
+  };
+
+  const onKey = (ev) => {
+    if (dlg.hidden) return;
+    if (ev.key === "Escape") {
+      close();
+      return;
+    }
+    if (ev.key === "Tab" && dlg.contains(document.activeElement)) trapFocus(ev);
+  };
+
+  function open(helpKey) {
+    const content = MESSAGES_SECTION_HELP[helpKey] || MESSAGES_SECTION_HELP.templates_form;
+    if (titleEl) titleEl.textContent = content.title;
+    if (bodyEl) bodyEl.textContent = content.body;
+    lastFocus = document.activeElement;
+    dlg.hidden = false;
+    dlg.setAttribute("aria-hidden", "false");
+    const btn = dlg.querySelector(".filters-help-close-btn");
+    (btn || dlg).focus();
+    document.addEventListener("keydown", onKey);
+  }
+
+  function close() {
+    dlg.hidden = true;
+    dlg.setAttribute("aria-hidden", "true");
+    document.removeEventListener("keydown", onKey);
+    if (lastFocus && typeof lastFocus.focus === "function") lastFocus.focus();
+  }
+
+  document.addEventListener("click", (ev) => {
+    const opener = ev.target.closest?.('[data-open="messages-section-help"]');
+    if (!opener) return;
+    ev.preventDefault();
+    open(opener.getAttribute("data-help-key") || "");
+  });
+
+  dlg.querySelectorAll("[data-messages-help-dismiss]").forEach((el) => {
+    el.addEventListener("click", (ev) => {
+      if (ev.target === el) close();
+    });
+  });
+}
+
 function renderFlowList(listEl, clientName) {
   if (!listEl) return;
   listEl.innerHTML = "";
@@ -437,6 +536,139 @@ function populateSiteLeadTemplateSelect(selectEl, currentValue) {
 function channelTemplateBucket(channel) {
   const ch = state.templates?.channels?.[channel];
   return ch && typeof ch === "object" ? ch : {};
+}
+
+function listTemplateChannels() {
+  return Object.keys(state.templates?.channels || {}).sort((a, b) => a.localeCompare(b, "pt-BR"));
+}
+
+/** Alinha com `custom_variables_storage_key` no backend: internal_lead → meta_lead. */
+function customVariablesStorageKey(ch) {
+  return ch === "internal_lead" ? "meta_lead" : ch;
+}
+
+const CV_OPT_LEADS = new Set(["meta_lead", "site_lead", "internal_lead"]);
+const CV_OPT_REPORTS = new Set(["google_report", "meta_report", "internal_report"]);
+
+function ensureCustomVarsChannelOptions(selectEl, channels, preferredValue) {
+  if (!selectEl) return;
+  const prev = String(preferredValue || selectEl.value || "").trim();
+  selectEl.innerHTML = "";
+  const leads = channels.filter((c) => CV_OPT_LEADS.has(c));
+  const reports = channels.filter((c) => CV_OPT_REPORTS.has(c));
+  const rest = channels.filter((c) => !CV_OPT_LEADS.has(c) && !CV_OPT_REPORTS.has(c));
+  const addGroup = (label, items) => {
+    if (!items.length) return;
+    const og = document.createElement("optgroup");
+    og.label = label;
+    items.forEach((c) => {
+      const o = document.createElement("option");
+      o.value = c;
+      o.textContent = c;
+      og.appendChild(o);
+    });
+    selectEl.appendChild(og);
+  };
+  addGroup("Leads", leads);
+  addGroup("Relatórios e interno", reports);
+  if (rest.length) addGroup("Outros", rest);
+  if (!channels.length) return;
+  if (prev && channels.includes(prev)) selectEl.value = prev;
+  else selectEl.value = channels[0];
+}
+
+function initCvChipsControl(wrapEl) {
+  const hidden = wrapEl.querySelector('input[type="hidden"].cv-source-keys');
+  const listEl = wrapEl.querySelector(".cv-chips-list");
+  const entry = wrapEl.querySelector(".cv-chips-entry");
+  if (!hidden || !listEl || !entry) return;
+  const notify = () => {
+    hidden.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  const render = () => {
+    listEl.innerHTML = "";
+    const values = parseCsvValue(hidden.value);
+    values.forEach((value, index) => {
+      const chip = document.createElement("span");
+      chip.className = "chip-tag";
+      chip.innerHTML = `<span>${escHtml(value)}</span>`;
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "chip-remove";
+      btn.setAttribute("aria-label", `Remover ${value}`);
+      btn.textContent = "×";
+      btn.addEventListener("click", () => {
+        const next = parseCsvValue(hidden.value).filter((_, idx) => idx !== index);
+        hidden.value = next.join(", ");
+        render();
+        notify();
+      });
+      chip.appendChild(btn);
+      listEl.appendChild(chip);
+    });
+  };
+  const addEntryValue = () => {
+    const raw = (entry.value || "").trim();
+    if (!raw) return;
+    const parts = raw
+      .split(/[,;]+/)
+      .map((x) => x.trim())
+      .filter(Boolean);
+    const current = parseCsvValue(hidden.value);
+    hidden.value = [...current, ...parts].join(", ");
+    entry.value = "";
+    render();
+    notify();
+  };
+  if (wrapEl.dataset.cvChipsReady !== "1") {
+    entry.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" || ev.key === ",") {
+        ev.preventDefault();
+        addEntryValue();
+        return;
+      }
+      if (ev.key === "Backspace" && !entry.value) {
+        const current = parseCsvValue(hidden.value);
+        if (!current.length) return;
+        hidden.value = current.slice(0, -1).join(", ");
+        render();
+        notify();
+      }
+    });
+    entry.addEventListener("blur", addEntryValue);
+    wrapEl.addEventListener("click", () => entry.focus());
+    wrapEl.dataset.cvChipsReady = "1";
+  }
+  render();
+}
+
+function updateCvCardHead(article) {
+  const kn = article.querySelector(".cv-key")?.value?.trim() || "";
+  const pre = article.querySelector(".cv-head-preview");
+  if (pre) pre.textContent = kn ? `{{${kn}}}` : "(sem nome)";
+  const st = article.querySelector(".cv-head-status");
+  if (!st) return;
+  const sk = article.querySelector('.cv-source-keys')?.value?.trim();
+  st.textContent = kn && sk ? "completo" : "incompleto";
+  st.className = `cv-head-status${kn && sk ? " is-ok" : " is-warn"}`;
+}
+
+function ensureSelectOptions(selectEl, channels, preferredValue) {
+  if (!selectEl) return;
+  const prev = String(preferredValue || selectEl.value || "").trim();
+  selectEl.innerHTML = "";
+  channels.forEach((channel) => {
+    const opt = document.createElement("option");
+    opt.value = channel;
+    opt.textContent = channel;
+    selectEl.appendChild(opt);
+  });
+  if (!channels.length) return;
+  if (prev && channels.includes(prev)) {
+    selectEl.value = prev;
+    return;
+  }
+  selectEl.value = channels[0];
 }
 
 /**
@@ -1123,19 +1355,20 @@ function renderTemplateVariables(channel) {
   Object.entries(vars).forEach(([key, label]) => {
     addPill(key, label);
   });
-  const customCh = channel === "internal_lead" ? "meta_lead" : channel;
-  if (customCh === "meta_lead" || customCh === "site_lead") {
-    const customs = state.templates.custom_variables?.[customCh] || [];
-    customs.forEach((ent) => {
-      const k = String(ent?.key || "").trim();
-      if (!k) return;
-      addPill(k, `Variável personalizada → ${k}`);
-    });
-  }
+  const sk = customVariablesStorageKey(channel);
+  const customs = state.templates.custom_variables?.[sk] || [];
+  customs.forEach((ent) => {
+    const k = String(ent?.key || "").trim();
+    if (!k) return;
+    addPill(k, `Variável personalizada → ${k}`);
+  });
 }
 
 function renderVariableResolutionPanel() {
-  const ch = document.getElementById("varResChannel")?.value || "meta_lead";
+  const channelSelect = document.getElementById("varResChannel");
+  const channels = listTemplateChannels();
+  ensureSelectOptions(channelSelect, channels, channelSelect?.value || "meta_lead");
+  const ch = channelSelect?.value || channels[0] || "meta_lead";
   const grid = document.getElementById("varResolutionGrid");
   if (!grid) return;
   const vr = state.templates.variable_resolution?.[ch] || {};
@@ -1167,54 +1400,168 @@ function renderVariableResolutionPanel() {
 }
 
 function renderCustomVariablesPanel() {
-  const ch = document.getElementById("customVarsChannel")?.value || "meta_lead";
+  const channelSelect = document.getElementById("customVarsChannel");
+  const channels = listTemplateChannels();
+  ensureCustomVarsChannelOptions(channelSelect, channels, channelSelect?.value || "meta_lead");
+  const ch = channelSelect?.value || channels[0] || "meta_lead";
+  const bucket = customVariablesStorageKey(ch);
+  const note = document.getElementById("customVarsChannelNote");
+  if (note) {
+    const nvars = Object.keys(state.templates.variables?.[ch] || {}).length;
+    note.textContent = nvars
+      ? "Passo 1: defina a origem dos campos; passo 2: personalize exibição (fonte, mapa, ordem). Variáveis de contexto = placeholders já resolvidos do canal."
+      : "Nenhuma variável de contexto listada para este canal — ainda pode usar chaves de payload JSON (fonte «Chaves no JSON»).";
+  }
   const list = document.getElementById("customVarsList");
   if (!list) return;
   list.innerHTML = "";
-  const items = state.templates.custom_variables?.[ch] || [];
+  const items = state.templates.custom_variables?.[bucket] || [];
   items.forEach((item, idx) => {
-    list.appendChild(buildCustomVarCardEl(item, idx));
+    list.appendChild(buildCustomVarCardEl(item, idx, ch, bucket));
   });
 }
 
-function buildCustomVarCardEl(item, idx) {
+function buildCustomVarCardEl(item, idx, templateChannel, _bucket) {
+  const source = (item?.source || "payload") === "context" ? "context" : "payload";
   const article = document.createElement("article");
   article.className = "custom-var-card";
   article.dataset.cvIndex = String(idx);
+  article.dataset.cvSource = source;
+
   const head = document.createElement("div");
   head.className = "custom-var-card-head";
-  const h = document.createElement("strong");
-  h.textContent = `Variável ${idx + 1}`;
+  const headLeft = document.createElement("div");
+  headLeft.className = "custom-var-card-head-left";
+  const h = document.createElement("div");
+  h.className = "custom-var-card-title";
+  h.innerHTML = `<span class="field-micro">#${idx + 1}</span> <code class="cv-head-preview"></code> <span class="cv-head-status is-warn">incompleto</span>`;
+  headLeft.appendChild(h);
+  const actions = document.createElement("div");
+  actions.className = "custom-var-card-actions";
+  const dup = document.createElement("button");
+  dup.type = "button";
+  dup.className = "ghost small";
+  dup.textContent = "Duplicar";
+  dup.addEventListener("click", () => {
+    const list = document.getElementById("customVarsList");
+    if (!list) return;
+    const n = list.querySelectorAll(".custom-var-card").length;
+    const snap = {
+      key: (article.querySelector(".cv-key")?.value || "").trim() + "_copy",
+      source: article.dataset.cvSource === "context" ? "context" : "payload",
+      source_keys: parseCsvValue(article.querySelector(".cv-source-keys")?.value || ""),
+      mappings: (() => {
+        try {
+          return JSON.parse(article.querySelector(".cv-mappings")?.value || "{}");
+        } catch {
+          return {};
+        }
+      })(),
+      default: article.querySelector(".cv-default")?.value ?? "",
+      normalize: {
+        trim: !!article.querySelector(".cv-trim")?.checked,
+        lower: !!article.querySelector(".cv-lower")?.checked,
+      },
+    };
+    list.appendChild(buildCustomVarCardEl(snap, n, templateChannel, _bucket));
+  });
+  const up = document.createElement("button");
+  up.type = "button";
+  up.className = "ghost small";
+  up.textContent = "↑";
+  up.setAttribute("aria-label", "Mover para cima");
+  up.addEventListener("click", () => {
+    const p = article.previousElementSibling;
+    if (p) article.parentNode?.insertBefore(article, p);
+  });
+  const down = document.createElement("button");
+  down.type = "button";
+  down.className = "ghost small";
+  down.textContent = "↓";
+  down.setAttribute("aria-label", "Mover para baixo");
+  down.addEventListener("click", () => {
+    const n = article.nextElementSibling;
+    if (n) n.parentNode?.insertBefore(n, article);
+  });
   const rm = document.createElement("button");
   rm.type = "button";
   rm.className = "ghost small";
   rm.textContent = "Remover";
-  rm.addEventListener("click", () => {
-    article.remove();
-  });
-  head.append(h, rm);
-  const grid = document.createElement("div");
-  grid.className = "custom-var-card-grid";
+  rm.addEventListener("click", () => article.remove());
+  actions.append(dup, up, down, rm);
+  head.append(headLeft, actions);
+
+  const flow = document.createElement("p");
+  flow.className = "field-micro custom-var-flow";
+  flow.textContent =
+    "Passo 1: Origem dos campos (secção acima) → contexto base. Passo 2: aqui escolhe fonte (JSON vs contexto) e transformação.";
+
+  const seg = document.createElement("div");
+  seg.className = "cv-source-seg";
+  const bPayload = document.createElement("button");
+  bPayload.type = "button";
+  bPayload.className = `cv-seg${source === "payload" ? " is-active" : ""}`;
+  bPayload.textContent = "Chaves no JSON";
+  const bCtx = document.createElement("button");
+  bCtx.type = "button";
+  bCtx.className = `cv-seg${source === "context" ? " is-active" : ""}`;
+  bCtx.textContent = "Variável já resolvida";
+  seg.append(bPayload, bCtx);
+
+  const ctxHint = document.createElement("p");
+  ctxHint.className = "field-micro cv-ctx-hint";
+  const vars = state.templates.variables?.[templateChannel] || {};
+  const varKeys = Object.keys(vars);
+  ctxHint.textContent = varKeys.length
+    ? `Exemplos: ${varKeys.slice(0, 8).join(", ")}${varKeys.length > 8 ? "…" : ""}. Ordem: primeira com valor vence.`
+    : "Sem lista de contexto; use a fonte «Chaves no JSON».";
 
   const keyLb = document.createElement("label");
-  keyLb.innerHTML = "Nome no template <span class='field-micro'>(ex.: bairro_amigavel)</span>";
+  keyLb.innerHTML = "Nome no template <span class='field-micro'>(a-z, 0-9, _; ex. bairro_amigavel)</span>";
   const keyIn = document.createElement("input");
   keyIn.type = "text";
   keyIn.className = "cv-key";
   keyIn.value = String(item?.key || "");
+  keyIn.autocomplete = "off";
+  keyIn.addEventListener("input", () => updateCvCardHead(article));
   keyLb.appendChild(keyIn);
 
-  const skLb = document.createElement("label");
-  skLb.innerHTML = "Chaves de origem (CSV)";
-  const skIn = document.createElement("input");
-  skIn.type = "text";
-  skIn.className = "cv-source-keys";
-  skIn.placeholder = "referencia, ref, codigo_bairro";
-  skIn.value = Array.isArray(item?.source_keys) ? item.source_keys.join(", ") : "";
-  skLb.appendChild(skIn);
+  const skLb = document.createElement("div");
+  skLb.className = "cv-source-block";
+  const skLabel = document.createElement("div");
+  skLabel.className = "cv-source-label";
+  const chipsWrap = document.createElement("div");
+  chipsWrap.className = "chips-control cv-chips-wrap";
+  const skHidden = document.createElement("input");
+  skHidden.type = "hidden";
+  skHidden.className = "cv-source-keys";
+  skHidden.value = Array.isArray(item?.source_keys) ? item.source_keys.join(", ") : "";
+  const listEl = document.createElement("div");
+  listEl.className = "chips-list cv-chips-list";
+  const skEntry = document.createElement("input");
+  skEntry.type = "text";
+  skEntry.className = "chips-entry cv-chips-entry";
+  skEntry.placeholder = source === "context" ? "ex.: nome e Enter" : "ex.: referencia e Enter";
+  chipsWrap.append(skHidden, listEl, skEntry);
+  skLabel.innerHTML = source === "context" ? "<span>Chaves de contexto</span>" : "<span>Chaves no JSON</span>";
+  skLb.append(skLabel, chipsWrap);
+  initCvChipsControl(chipsWrap);
+  skHidden.addEventListener("input", () => updateCvCardHead(article));
+  skEntry.addEventListener("blur", () => updateCvCardHead(article));
+
+  const setSource = (mode) => {
+    article.dataset.cvSource = mode;
+    bPayload.className = `cv-seg${mode === "payload" ? " is-active" : ""}`;
+    bCtx.className = `cv-seg${mode === "context" ? " is-active" : ""}`;
+    skEntry.placeholder = mode === "context" ? "ex.: nome e Enter" : "ex.: referencia e Enter";
+    const lab = skLabel.querySelector("span");
+    if (lab) lab.textContent = mode === "context" ? "Chaves de contexto" : "Chaves no JSON";
+  };
+  bPayload.addEventListener("click", () => setSource("payload"));
+  bCtx.addEventListener("click", () => setSource("context"));
 
   const defLb = document.createElement("label");
-  defLb.innerHTML = "Valor se não houver no mapa";
+  defLb.innerHTML = "Texto padrão se o mapa não bater (ou vazio)";
   const defIn = document.createElement("input");
   defIn.type = "text";
   defIn.className = "cv-default";
@@ -1236,20 +1583,168 @@ function buildCustomVarCardEl(item, idx) {
   normWrap.appendChild(lowerCk);
   normWrap.appendChild(document.createTextNode(" Lowercase ao comparar "));
 
-  const mapLb = document.createElement("label");
-  mapLb.className = "custom-var-card-full";
-  mapLb.innerHTML = "Mapa JSON: valor bruto → texto exibido";
+  const mapTableWrap = document.createElement("div");
+  mapTableWrap.className = "cv-map-table-wrap";
+  const mapToolbar = document.createElement("div");
+  mapToolbar.className = "cv-map-toolbar";
+  const mapAdd = document.createElement("button");
+  mapAdd.type = "button";
+  mapAdd.className = "ghost small";
+  mapAdd.textContent = "Adicionar linha no mapa";
+  const mapJsonToggle = document.createElement("button");
+  mapJsonToggle.type = "button";
+  mapJsonToggle.className = "ghost small";
+  mapJsonToggle.textContent = "Ver / editar JSON";
+  mapToolbar.append(mapAdd, mapJsonToggle);
+  const mapTable = document.createElement("div");
+  mapTable.className = "cv-map-table";
   const mapTa = document.createElement("textarea");
   mapTa.className = "cv-mappings";
+  mapTa.style.display = "none";
   try {
     mapTa.value = JSON.stringify(item?.mappings && typeof item.mappings === "object" ? item.mappings : {}, null, 2);
   } catch {
     mapTa.value = "{}";
   }
-  mapLb.appendChild(mapTa);
+  const syncTableFromJson = () => {
+    mapTable.innerHTML = "";
+    let obj = {};
+    try {
+      const p = JSON.parse(mapTa.value || "{}");
+      if (p && typeof p === "object" && !Array.isArray(p)) obj = p;
+    } catch {
+      obj = {};
+    }
+    Object.entries(obj).forEach(([k, v]) => {
+      const row = document.createElement("div");
+      row.className = "cv-map-row";
+      const kIn = document.createElement("input");
+      kIn.type = "text";
+      kIn.className = "cv-map-k";
+      kIn.value = k;
+      const vIn = document.createElement("input");
+      vIn.type = "text";
+      vIn.className = "cv-map-v";
+      vIn.value = String(v);
+      const rmB = document.createElement("button");
+      rmB.type = "button";
+      rmB.className = "ghost small";
+      rmB.textContent = "×";
+      rmB.addEventListener("click", () => {
+        row.remove();
+        syncJsonFromTable();
+      });
+      kIn.addEventListener("input", syncJsonFromTable);
+      vIn.addEventListener("input", syncJsonFromTable);
+      row.append(kIn, vIn, rmB);
+      mapTable.appendChild(row);
+    });
+  };
+  const syncJsonFromTable = () => {
+    const rows = mapTable.querySelectorAll(".cv-map-row");
+    const o = {};
+    rows.forEach((row) => {
+      const k = (row.querySelector(".cv-map-k")?.value || "").trim();
+      if (!k) return;
+      o[k] = row.querySelector(".cv-map-v")?.value ?? "";
+    });
+    try {
+      mapTa.value = JSON.stringify(o, null, 2);
+    } catch {
+      mapTa.value = "{}";
+    }
+  };
+  mapAdd.addEventListener("click", () => {
+    if (mapTa.style.display === "block") {
+      return;
+    }
+    const row = document.createElement("div");
+    row.className = "cv-map-row";
+    row.innerHTML = `<input type="text" class="cv-map-k" /><input type="text" class="cv-map-v" /><button type="button" class="ghost small" aria-label="remover">×</button>`;
+    row.querySelector("button")?.addEventListener("click", () => {
+      row.remove();
+      syncJsonFromTable();
+    });
+    row.querySelector(".cv-map-k")?.addEventListener("input", syncJsonFromTable);
+    row.querySelector(".cv-map-v")?.addEventListener("input", syncJsonFromTable);
+    mapTable.appendChild(row);
+  });
+  let mapJsonMode = false;
+  mapJsonToggle.addEventListener("click", () => {
+    if (!mapJsonMode) {
+      syncJsonFromTable();
+      mapTa.style.display = "block";
+      mapTable.style.display = "none";
+      mapJsonToggle.textContent = "Voltar ao mapa (tabela)";
+      mapJsonMode = true;
+    } else {
+      try {
+        syncTableFromJson();
+      } catch {
+        /* se JSON inválido, mantém tabela vazia */
+        mapTable.innerHTML = "";
+      }
+      mapTa.style.display = "none";
+      mapTable.style.display = "";
+      mapJsonToggle.textContent = "Ver / editar JSON";
+      mapJsonMode = false;
+    }
+  });
+  syncTableFromJson();
 
-  grid.append(keyLb, skLb, defLb, normWrap, mapLb);
+  const previewRow = document.createElement("div");
+  previewRow.className = "cv-preview-row";
+  const rawTest = document.createElement("input");
+  rawTest.type = "text";
+  rawTest.className = "cv-raw-test";
+  rawTest.placeholder = "Valor bruto de teste (simula o que veio do JSON / contexto)";
+  const prevBtn = document.createElement("button");
+  prevBtn.type = "button";
+  prevBtn.className = "ghost small";
+  prevBtn.textContent = "Pré-visualizar transformação";
+  const prevOut = document.createElement("code");
+  prevOut.className = "cv-preview-out";
+  prevOut.textContent = "—";
+  prevBtn.addEventListener("click", async () => {
+    if (mapTable.style.display !== "none" && mapTa.style.display === "none") {
+      syncJsonFromTable();
+    }
+    const rawJ = mapTa.value || "{}";
+    let mappings = {};
+    try {
+      const p = JSON.parse(rawJ);
+      if (p && typeof p === "object" && !Array.isArray(p)) mappings = p;
+    } catch {
+      prevOut.textContent = "JSON de mapa inválido";
+      return;
+    }
+    const r = await dashFetch(apiUrl("/api/message-templates/custom-variable-preview"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        raw: String(rawTest.value || ""),
+        mappings,
+        default: defIn.value ?? "",
+        normalize: { trim: trimCk.checked, lower: lowerCk.checked },
+      }),
+    });
+    const b = await r.json();
+    prevOut.textContent = b.ok && b.result != null ? b.result : b.error || "falha";
+  });
+  previewRow.append(document.createTextNode("Teste: "), rawTest, prevBtn, document.createTextNode(" → "), prevOut);
+
+  const mapHead = document.createElement("p");
+  mapHead.className = "field-micro";
+  mapHead.textContent = "Mapa: valor bruto → texto exibido";
+  mapTableWrap.append(mapHead, mapToolbar, mapTable, mapTa);
+
+  const grid = document.createElement("div");
+  grid.className = "custom-var-card-grid";
+  grid.append(flow, seg, keyLb, ctxHint, skLb, defLb, normWrap, mapTableWrap, previewRow);
+
   article.append(head, grid);
+  if (source === "context") setSource("context");
+  updateCvCardHead(article);
   return article;
 }
 
@@ -1257,16 +1752,21 @@ function appendEmptyCustomVarCard() {
   const list = document.getElementById("customVarsList");
   if (!list) return;
   const n = list.querySelectorAll(".custom-var-card").length;
+  const ch = document.getElementById("customVarsChannel")?.value || "meta_lead";
+  const bucket = customVariablesStorageKey(ch);
   list.appendChild(
     buildCustomVarCardEl(
       {
         key: "",
+        source: "payload",
         source_keys: [],
         mappings: {},
         default: "",
         normalize: { trim: true, lower: false },
       },
       n,
+      ch,
+      bucket,
     ),
   );
 }
@@ -1316,14 +1816,29 @@ async function saveCustomVariables() {
       .split(/[,;]+/)
       .map((s) => s.trim())
       .filter(Boolean);
-    const rawJ = card.querySelector(".cv-mappings")?.value || "{}";
+    const source = card.dataset.cvSource === "context" ? "context" : "payload";
+    const mapTa = card.querySelector(".cv-mappings");
+    const mapTable = card.querySelector(".cv-map-table");
     let mappings = {};
-    try {
-      const parsed = JSON.parse(rawJ);
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) mappings = parsed;
-    } catch {
-      fb.textContent = "JSON do mapa inválido numa das variáveis.";
-      return;
+    if (mapTa && mapTa.style.display === "block") {
+      const rawJ = (mapTa.value || "").trim() || "{}";
+      try {
+        const parsed = JSON.parse(rawJ);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) mappings = parsed;
+        else {
+          fb.textContent = "JSON do mapa inválido numa das variáveis.";
+          return;
+        }
+      } catch {
+        fb.textContent = "JSON do mapa inválido numa das variáveis.";
+        return;
+      }
+    } else if (mapTable) {
+      mapTable.querySelectorAll(".cv-map-row").forEach((row) => {
+        const mk = (row.querySelector(".cv-map-k")?.value || "").trim();
+        if (!mk) return;
+        mappings[mk] = String(row.querySelector(".cv-map-v")?.value ?? "");
+      });
     }
     const def = card.querySelector(".cv-default")?.value ?? "";
     const trim = !!card.querySelector(".cv-trim")?.checked;
@@ -1331,6 +1846,7 @@ async function saveCustomVariables() {
     if (!key || !source_keys.length) continue;
     items.push({
       key,
+      source,
       source_keys,
       mappings,
       default: String(def),
@@ -1381,14 +1897,118 @@ function renderTemplatesCatalog() {
   });
 }
 
-function renderFiltersForm() {
-  const form = document.getElementById("filtersForm");
-  if (!form) return;
-  const rules = state.templates.filters?.meta_lead || {};
+function normalizeFilterRules(rules) {
+  const src = rules && typeof rules === "object" ? rules : {};
+  return {
+    exclude_exact: Array.isArray(src.exclude_exact) ? src.exclude_exact : [],
+    exclude_contains: Array.isArray(src.exclude_contains) ? src.exclude_contains : [],
+    exclude_regex: Array.isArray(src.exclude_regex) ? src.exclude_regex : [],
+  };
+}
+
+function syncFiltersAddChannelOptions() {
+  const select = document.getElementById("filtersAddChannel");
+  if (!select) return;
+  const channels = listTemplateChannels();
+  const used = new Set(state.activeFilterChannels || []);
+  const available = channels.filter((channel) => !used.has(channel));
+  select.innerHTML = "";
+  if (!available.length) {
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = "Todos os canais já adicionados";
+    select.appendChild(opt);
+    select.disabled = true;
+    return;
+  }
+  available.forEach((channel) => {
+    const opt = document.createElement("option");
+    opt.value = channel;
+    opt.textContent = channel;
+    select.appendChild(opt);
+  });
+  select.disabled = false;
+}
+
+function renderGlobalFiltersSummary() {
+  const root = document.getElementById("globalFiltersSummary");
+  if (!root) return;
+  root.innerHTML = "";
+  const filters = state.templates.filters || {};
+  const channels = state.activeFilterChannels || [];
+  if (!channels.length) {
+    const empty = document.createElement("span");
+    empty.className = "field-micro";
+    empty.textContent = "Nenhum canal com filtros globais adicionado.";
+    root.appendChild(empty);
+    return;
+  }
+  channels.forEach((channel) => {
+    const rules = normalizeFilterRules(filters[channel]);
+    const total = rules.exclude_exact.length + rules.exclude_contains.length + rules.exclude_regex.length;
+    const pill = document.createElement("span");
+    pill.className = "global-filters-summary-pill";
+    pill.textContent = `${channel} · ${total} regra(s)`;
+    root.appendChild(pill);
+  });
+}
+
+function removeFilterChannel(channel) {
+  state.activeFilterChannels = (state.activeFilterChannels || []).filter((item) => item !== channel);
+  renderFiltersForm();
+}
+
+function addFilterChannel() {
+  const select = document.getElementById("filtersAddChannel");
+  if (!select || !select.value) return;
+  const next = select.value;
+  const current = new Set(state.activeFilterChannels || []);
+  current.add(next);
+  state.activeFilterChannels = Array.from(current).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  if (!state.templates.filters[next]) {
+    state.templates.filters[next] = { exclude_exact: [], exclude_contains: [], exclude_regex: [] };
+  }
+  renderFiltersForm();
+}
+
+function renderGlobalFilterCard(channel, rules) {
+  const tpl = document.getElementById("globalFilterCardTemplate");
+  if (!(tpl instanceof HTMLTemplateElement)) return null;
+  const frag = tpl.content.cloneNode(true);
+  const form = frag.querySelector(".global-filter-card");
+  if (!form) return null;
+  form.dataset.filterChannel = channel;
+  const title = frag.querySelector(".global-filter-channel-title");
+  if (title) title.textContent = channel;
   form.elements.exclude_exact.value = (rules.exclude_exact || []).join(", ");
   form.elements.exclude_contains.value = (rules.exclude_contains || []).join(", ");
   form.elements.exclude_regex.value = (rules.exclude_regex || []).join(", ");
   setupChipFields(form, ["exclude_exact", "exclude_contains", "exclude_regex"]);
+  const removeBtn = frag.querySelector(".global-filter-remove-btn");
+  removeBtn?.addEventListener("click", () => removeFilterChannel(channel));
+  form.addEventListener("submit", (ev) => saveFilters(ev, channel));
+  return frag;
+}
+
+function renderFiltersForm() {
+  const root = document.getElementById("globalFiltersList");
+  if (!root) return;
+  const allChannels = listTemplateChannels();
+  const filters = state.templates.filters || {};
+  const channelsWithFilters = Object.keys(filters || {});
+  const baseline = channelsWithFilters.length ? channelsWithFilters : allChannels.slice(0, 2);
+  const currentSet = new Set(state.activeFilterChannels || baseline);
+  state.activeFilterChannels = Array.from(currentSet)
+    .filter((ch) => allChannels.includes(ch))
+    .sort((a, b) => a.localeCompare(b, "pt-BR"));
+  root.innerHTML = "";
+  (state.activeFilterChannels || []).forEach((channel) => {
+    const rules = normalizeFilterRules(filters[channel]);
+    const card = renderGlobalFilterCard(channel, rules);
+    if (card) root.appendChild(card);
+  });
+  syncFiltersAddChannelOptions();
+  renderGlobalFiltersSummary();
 }
 
 async function fetchMetaClients() {
@@ -1930,10 +2550,15 @@ async function saveTemplate(ev) {
   await fetchTemplates();
 }
 
-async function saveFilters(ev) {
+async function saveFilters(ev, forcedChannel = "") {
   ev.preventDefault();
   const form = ev.currentTarget;
-  const feedback = document.getElementById("filtersFeedback");
+  const channel = String(forcedChannel || form?.dataset?.filterChannel || "").trim();
+  const feedback = form?.querySelector(".global-filter-feedback") || document.getElementById("filtersFeedback");
+  if (!channel) {
+    if (feedback) feedback.textContent = "Canal inválido para salvar filtros.";
+    return;
+  }
   const badRx = invalidRegexPatterns(form.querySelector('input[name="exclude_regex"]'));
   if (badRx.length) {
     feedback.textContent = `Corrija a(s) regex inválida(s): ${badRx.join(", ")}`;
@@ -1941,7 +2566,7 @@ async function saveFilters(ev) {
   }
   feedback.textContent = "Salvando filtros...";
   const payload = Object.fromEntries(new FormData(form).entries());
-  const r = await dashFetch(apiUrl("/api/message-filters/meta_lead"), {
+  const r = await dashFetch(apiUrl(`/api/message-filters/${encodeURIComponent(channel)}`), {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -1951,7 +2576,7 @@ async function saveFilters(ev) {
     feedback.textContent = `Erro: ${body.error || "falha ao salvar filtros"}`;
     return;
   }
-  feedback.textContent = "Filtros globais salvos com sucesso.";
+  feedback.textContent = `Filtros globais de ${channel} salvos com sucesso.`;
   await fetchTemplates();
 }
 
@@ -1983,20 +2608,18 @@ async function generateTemplatePreview() {
     conversions_block: "- Formulário: 12\n- WhatsApp: 8",
     campaigns_block: "1) *Campanha Busca*\n👁️ Impressoes: 12.300\n🖱️ Cliques: 550",
   };
-  const customCh = ch === "internal_lead" ? "meta_lead" : ch;
-  if (customCh === "meta_lead" || customCh === "site_lead") {
-    const customs = state.templates.custom_variables?.[customCh] || [];
-    customs.forEach((ent) => {
-      const k = String(ent?.key || "").trim();
-      if (!k) return;
-      const map0 = ent.mappings && typeof ent.mappings === "object" ? Object.values(ent.mappings)[0] : "";
-      sampleContext[k] = map0 ? String(map0) : "(exemplo)";
-    });
-  }
+  const bucket = customVariablesStorageKey(ch);
+  const customs = state.templates.custom_variables?.[bucket] || [];
+  customs.forEach((ent) => {
+    const k = String(ent?.key || "").trim();
+    if (!k) return;
+    const map0 = ent.mappings && typeof ent.mappings === "object" ? Object.values(ent.mappings)[0] : "";
+    sampleContext[k] = map0 != null && map0 !== "" ? String(map0) : "(exemplo)";
+  });
   const r = await dashFetch(apiUrl("/api/message-templates/preview"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content: payload.content || "", context: sampleContext }),
+    body: JSON.stringify({ content: payload.content || "", context: sampleContext, channel: ch }),
   });
   const body = await r.json();
   document.getElementById("tplPreview").textContent = body.preview || "";
@@ -2504,12 +3127,13 @@ function renderCatalogGroups() {
 function bindUI() {
   bindTabs();
   bindFiltersHelpModal();
+  bindMessagesSectionHelpModal();
   bindFlowModal();
   bindBootChecklistTooltip();
   document.getElementById("newClientForm").addEventListener("submit", submitNewMetaClient);
   document.getElementById("newGoogleClientForm").addEventListener("submit", submitNewGoogleClient);
   document.getElementById("templateForm").addEventListener("submit", saveTemplate);
-  document.getElementById("filtersForm").addEventListener("submit", saveFilters);
+  document.getElementById("filtersAddChannelBtn")?.addEventListener("click", addFilterChannel);
   document.getElementById("refreshBtn").addEventListener("click", fetchMetaClients);
   document.getElementById("refreshGoogleBtn").addEventListener("click", fetchGoogleClients);
   document.getElementById("refreshTemplatesBtn").addEventListener("click", fetchTemplates);
@@ -2537,7 +3161,6 @@ function bindUI() {
     "lead_exclude_contains",
     "lead_exclude_regex",
   ]);
-  setupChipFields(document.getElementById("filtersForm"), ["exclude_exact", "exclude_contains", "exclude_regex"]);
   document.getElementById("varResChannel")?.addEventListener("change", renderVariableResolutionPanel);
   document.getElementById("varResSaveBtn")?.addEventListener("click", () =>
     saveVariableResolution().catch((e) => console.error(e)),
