@@ -4,7 +4,13 @@ const state = {
   siteLeadRoutes: [],
   catalogGroups: [],
   catalogFlowEvents: [],
-  templates: { channels: {}, variables: {}, filters: {} },
+  templates: {
+    channels: {},
+    variables: {},
+    filters: {},
+    variable_resolution: {},
+    custom_variables: {},
+  },
   eventsByClient: new Map(),
   eventStream: null,
   metaCatalog: {
@@ -1080,11 +1086,24 @@ function renderGoogleClients() {
   refreshInternalTemplateSelects();
 }
 
+const LEAD_RESOLVABLE_SLOTS = [
+  "nome",
+  "email",
+  "whatsapp",
+  "telefone_digitos",
+  "page_path",
+  "utm_source",
+  "utm_medium",
+  "utm_campaign",
+  "utm_term",
+  "utm_content",
+];
+
 function renderTemplateVariables(channel) {
   const vars = state.templates.variables?.[channel] || {};
   const box = document.getElementById("tplVars");
   box.innerHTML = "";
-  Object.entries(vars).forEach(([key, label]) => {
+  const addPill = (key, label) => {
     const pill = document.createElement("button");
     pill.type = "button";
     pill.className = "var-pill";
@@ -1100,7 +1119,236 @@ function renderTemplateVariables(channel) {
       textarea.selectionStart = textarea.selectionEnd = start + insertion.length;
     });
     box.appendChild(pill);
+  };
+  Object.entries(vars).forEach(([key, label]) => {
+    addPill(key, label);
   });
+  const customCh = channel === "internal_lead" ? "meta_lead" : channel;
+  if (customCh === "meta_lead" || customCh === "site_lead") {
+    const customs = state.templates.custom_variables?.[customCh] || [];
+    customs.forEach((ent) => {
+      const k = String(ent?.key || "").trim();
+      if (!k) return;
+      addPill(k, `Variável personalizada → ${k}`);
+    });
+  }
+}
+
+function renderVariableResolutionPanel() {
+  const ch = document.getElementById("varResChannel")?.value || "meta_lead";
+  const grid = document.getElementById("varResolutionGrid");
+  if (!grid) return;
+  const vr = state.templates.variable_resolution?.[ch] || {};
+  const labels = state.templates.variables?.[ch] || {};
+  grid.innerHTML = "";
+  LEAD_RESOLVABLE_SLOTS.forEach((slot) => {
+    const row = document.createElement("div");
+    row.className = "var-resolution-row";
+    const lab = document.createElement("label");
+    lab.innerHTML = `<strong>${escHtml(slot)}</strong><br /><span class="field-micro">${escHtml(labels[slot] || "")}</span>`;
+    const wrap = document.createElement("label");
+    wrap.className = "var-resolution-input-wrap";
+    const span = document.createElement("span");
+    span.className = "field-micro";
+    span.textContent = "Chaves (CSV, ordem de tentativa)";
+    const inp = document.createElement("input");
+    inp.type = "text";
+    inp.id = `vrSlot_${slot}`;
+    inp.autocomplete = "off";
+    inp.placeholder = "ex.: nome_completo, nome, name";
+    const keys = vr[slot]?.source_keys;
+    inp.value = Array.isArray(keys) ? keys.join(", ") : "";
+    wrap.appendChild(span);
+    wrap.appendChild(inp);
+    row.appendChild(lab);
+    row.appendChild(wrap);
+    grid.appendChild(row);
+  });
+}
+
+function renderCustomVariablesPanel() {
+  const ch = document.getElementById("customVarsChannel")?.value || "meta_lead";
+  const list = document.getElementById("customVarsList");
+  if (!list) return;
+  list.innerHTML = "";
+  const items = state.templates.custom_variables?.[ch] || [];
+  items.forEach((item, idx) => {
+    list.appendChild(buildCustomVarCardEl(item, idx));
+  });
+}
+
+function buildCustomVarCardEl(item, idx) {
+  const article = document.createElement("article");
+  article.className = "custom-var-card";
+  article.dataset.cvIndex = String(idx);
+  const head = document.createElement("div");
+  head.className = "custom-var-card-head";
+  const h = document.createElement("strong");
+  h.textContent = `Variável ${idx + 1}`;
+  const rm = document.createElement("button");
+  rm.type = "button";
+  rm.className = "ghost small";
+  rm.textContent = "Remover";
+  rm.addEventListener("click", () => {
+    article.remove();
+  });
+  head.append(h, rm);
+  const grid = document.createElement("div");
+  grid.className = "custom-var-card-grid";
+
+  const keyLb = document.createElement("label");
+  keyLb.innerHTML = "Nome no template <span class='field-micro'>(ex.: bairro_amigavel)</span>";
+  const keyIn = document.createElement("input");
+  keyIn.type = "text";
+  keyIn.className = "cv-key";
+  keyIn.value = String(item?.key || "");
+  keyLb.appendChild(keyIn);
+
+  const skLb = document.createElement("label");
+  skLb.innerHTML = "Chaves de origem (CSV)";
+  const skIn = document.createElement("input");
+  skIn.type = "text";
+  skIn.className = "cv-source-keys";
+  skIn.placeholder = "referencia, ref, codigo_bairro";
+  skIn.value = Array.isArray(item?.source_keys) ? item.source_keys.join(", ") : "";
+  skLb.appendChild(skIn);
+
+  const defLb = document.createElement("label");
+  defLb.innerHTML = "Valor se não houver no mapa";
+  const defIn = document.createElement("input");
+  defIn.type = "text";
+  defIn.className = "cv-default";
+  defIn.value = String(item?.default ?? "");
+  defLb.appendChild(defIn);
+
+  const normWrap = document.createElement("label");
+  normWrap.className = "custom-var-card-full";
+  const trimCk = document.createElement("input");
+  trimCk.type = "checkbox";
+  trimCk.className = "cv-trim";
+  trimCk.checked = item?.normalize?.trim !== false;
+  const lowerCk = document.createElement("input");
+  lowerCk.type = "checkbox";
+  lowerCk.className = "cv-lower";
+  lowerCk.checked = !!item?.normalize?.lower;
+  normWrap.appendChild(trimCk);
+  normWrap.appendChild(document.createTextNode(" Trim ao comparar "));
+  normWrap.appendChild(lowerCk);
+  normWrap.appendChild(document.createTextNode(" Lowercase ao comparar "));
+
+  const mapLb = document.createElement("label");
+  mapLb.className = "custom-var-card-full";
+  mapLb.innerHTML = "Mapa JSON: valor bruto → texto exibido";
+  const mapTa = document.createElement("textarea");
+  mapTa.className = "cv-mappings";
+  try {
+    mapTa.value = JSON.stringify(item?.mappings && typeof item.mappings === "object" ? item.mappings : {}, null, 2);
+  } catch {
+    mapTa.value = "{}";
+  }
+  mapLb.appendChild(mapTa);
+
+  grid.append(keyLb, skLb, defLb, normWrap, mapLb);
+  article.append(head, grid);
+  return article;
+}
+
+function appendEmptyCustomVarCard() {
+  const list = document.getElementById("customVarsList");
+  if (!list) return;
+  const n = list.querySelectorAll(".custom-var-card").length;
+  list.appendChild(
+    buildCustomVarCardEl(
+      {
+        key: "",
+        source_keys: [],
+        mappings: {},
+        default: "",
+        normalize: { trim: true, lower: false },
+      },
+      n,
+    ),
+  );
+}
+
+async function saveVariableResolution() {
+  const fb = document.getElementById("varResFeedback");
+  const ch = document.getElementById("varResChannel")?.value || "meta_lead";
+  if (!fb) return;
+  fb.textContent = "Salvando...";
+  const payload = {};
+  LEAD_RESOLVABLE_SLOTS.forEach((slot) => {
+    const inp = document.getElementById(`vrSlot_${slot}`);
+    const raw = (inp?.value || "").trim();
+    if (!raw) return;
+    const keys = raw
+      .split(/[,;]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (keys.length) payload[slot] = { source_keys: keys };
+  });
+  const r = await dashFetch(apiUrl(`/api/message-templates/variable-resolution/${encodeURIComponent(ch)}`), {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const body = await r.json();
+  if (!r.ok || !body.ok) {
+    fb.textContent = `Erro: ${body.error || "falha ao salvar"}`;
+    return;
+  }
+  fb.textContent = "Chaves de origem salvas.";
+  await fetchTemplates();
+}
+
+async function saveCustomVariables() {
+  const fb = document.getElementById("customVarsFeedback");
+  const ch = document.getElementById("customVarsChannel")?.value || "meta_lead";
+  if (!fb) return;
+  fb.textContent = "Salvando...";
+  const list = document.getElementById("customVarsList");
+  const items = [];
+  const cards = list?.querySelectorAll(".custom-var-card") || [];
+  for (const card of cards) {
+    const key = card.querySelector(".cv-key")?.value?.trim() || "";
+    const sk = card.querySelector(".cv-source-keys")?.value || "";
+    const source_keys = sk
+      .split(/[,;]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const rawJ = card.querySelector(".cv-mappings")?.value || "{}";
+    let mappings = {};
+    try {
+      const parsed = JSON.parse(rawJ);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) mappings = parsed;
+    } catch {
+      fb.textContent = "JSON do mapa inválido numa das variáveis.";
+      return;
+    }
+    const def = card.querySelector(".cv-default")?.value ?? "";
+    const trim = !!card.querySelector(".cv-trim")?.checked;
+    const lower = !!card.querySelector(".cv-lower")?.checked;
+    if (!key || !source_keys.length) continue;
+    items.push({
+      key,
+      source_keys,
+      mappings,
+      default: String(def),
+      normalize: { trim, lower },
+    });
+  }
+  const r = await dashFetch(apiUrl(`/api/message-templates/custom-variables/${encodeURIComponent(ch)}`), {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ items }),
+  });
+  const body = await r.json();
+  if (!r.ok || !body.ok) {
+    fb.textContent = `Erro: ${body.error || "falha ao salvar"}`;
+    return;
+  }
+  fb.textContent = "Variáveis personalizadas salvas.";
+  await fetchTemplates();
 }
 
 function renderTemplatesCatalog() {
@@ -1587,6 +1835,8 @@ async function fetchTemplates() {
   renderTemplateVariables(document.getElementById("tplChannel").value);
   renderTemplatesCatalog();
   renderFiltersForm();
+  renderVariableResolutionPanel();
+  renderCustomVariablesPanel();
   refreshLeadTemplateSelects();
 }
 
@@ -1671,7 +1921,12 @@ async function saveTemplate(ev) {
     feedback.textContent = `Erro: ${body.error || "falha ao salvar template"}`;
     return;
   }
-  feedback.textContent = "Template salvo com sucesso.";
+  const unk = body.unknown_placeholders;
+  if (Array.isArray(unk) && unk.length) {
+    feedback.textContent = `Template salvo. Aviso: placeholders não reconhecidos: ${unk.join(", ")}`;
+  } else {
+    feedback.textContent = "Template salvo com sucesso.";
+  }
   await fetchTemplates();
 }
 
@@ -1703,6 +1958,7 @@ async function saveFilters(ev) {
 async function generateTemplatePreview() {
   const form = document.getElementById("templateForm");
   const payload = Object.fromEntries(new FormData(form).entries());
+  const ch = String(payload.channel || "meta_lead");
   const sampleContext = {
     client_name: "Cliente Exemplo",
     page_id: "102086421781424",
@@ -1727,6 +1983,16 @@ async function generateTemplatePreview() {
     conversions_block: "- Formulário: 12\n- WhatsApp: 8",
     campaigns_block: "1) *Campanha Busca*\n👁️ Impressoes: 12.300\n🖱️ Cliques: 550",
   };
+  const customCh = ch === "internal_lead" ? "meta_lead" : ch;
+  if (customCh === "meta_lead" || customCh === "site_lead") {
+    const customs = state.templates.custom_variables?.[customCh] || [];
+    customs.forEach((ent) => {
+      const k = String(ent?.key || "").trim();
+      if (!k) return;
+      const map0 = ent.mappings && typeof ent.mappings === "object" ? Object.values(ent.mappings)[0] : "";
+      sampleContext[k] = map0 ? String(map0) : "(exemplo)";
+    });
+  }
   const r = await dashFetch(apiUrl("/api/message-templates/preview"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -2272,6 +2538,15 @@ function bindUI() {
     "lead_exclude_regex",
   ]);
   setupChipFields(document.getElementById("filtersForm"), ["exclude_exact", "exclude_contains", "exclude_regex"]);
+  document.getElementById("varResChannel")?.addEventListener("change", renderVariableResolutionPanel);
+  document.getElementById("varResSaveBtn")?.addEventListener("click", () =>
+    saveVariableResolution().catch((e) => console.error(e)),
+  );
+  document.getElementById("customVarsChannel")?.addEventListener("change", renderCustomVariablesPanel);
+  document.getElementById("customVarsAddBtn")?.addEventListener("click", appendEmptyCustomVarCard);
+  document.getElementById("customVarsSaveBtn")?.addEventListener("click", () =>
+    saveCustomVariables().catch((e) => console.error(e)),
+  );
 }
 
 async function runBootStep(name, fn) {

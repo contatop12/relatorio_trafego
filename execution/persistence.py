@@ -405,8 +405,9 @@ def save_message_templates_body(body: Dict[str, Any]) -> None:
 def save_template_channels(channels: Dict[str, Any]) -> None:
     """Atualiza só chaves de canais (meta_lead, google_report, …), preservando filters no documento."""
     body = get_message_templates_body()
+    _skip = frozenset({"filters", "variable_resolution", "custom_variables"})
     for k, v in channels.items():
-        if k == "filters":
+        if k in _skip:
             continue
         if isinstance(v, dict):
             body[k] = deepcopy(v)

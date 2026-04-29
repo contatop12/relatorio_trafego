@@ -51,10 +51,15 @@ from execution.live_events import (
     read_recent_events,
 )
 from execution.message_templates import (
+    TEMPLATE_VARIABLES,
+    list_template_placeholder_keys,
     list_templates_payload,
+    load_merged_custom_variables,
     render_template_text,
+    upsert_custom_variables_channel,
     upsert_filter_rules,
     upsert_template,
+    upsert_variable_resolution_channel,
 )
 from execution.meta_client import MetaAPIAuthError, list_business_ad_accounts, list_business_pages
 
@@ -1449,6 +1454,23 @@ def api_upsert_message_template(channel: str, template_id: str) -> Any:
     except ValueError as e:
         return jsonify({"ok": False, "error": str(e)}), 400
 
+    unknown_placeholders: List[str] = []
+    vars_for_ch = TEMPLATE_VARIABLES.get(channel)
+    if isinstance(vars_for_ch, dict):
+        allowed = set(vars_for_ch.keys())
+        cv_ch = None
+        if channel in ("meta_lead", "site_lead"):
+            cv_ch = channel
+        elif channel == "internal_lead":
+            cv_ch = "meta_lead"
+        if cv_ch:
+            for ent in load_merged_custom_variables().get(cv_ch, []):
+                if isinstance(ent, dict) and ent.get("key"):
+                    allowed.add(str(ent["key"]))
+        for tok in list_template_placeholder_keys(content):
+            if tok not in allowed:
+                unknown_placeholders.append(tok)
+
     publish_event(
         source="dashboard_app",
         stage="TEMPLATE_SALVO",
@@ -1456,7 +1478,7 @@ def api_upsert_message_template(channel: str, template_id: str) -> Any:
         detail=f"Template {channel}/{template_id} salvo",
         payload={"channel": channel, "template_id": template_id},
     )
-    return jsonify({"ok": True, "template": data})
+    return jsonify({"ok": True, "template": data, "unknown_placeholders": unknown_placeholders})
 
 
 @app.post("/api/message-templates/preview")
@@ -1490,6 +1512,45 @@ def api_upsert_message_filters(channel: str) -> Any:
         payload={"channel": channel},
     )
     return jsonify({"ok": True, "filters": data})
+
+
+@app.put("/api/message-templates/variable-resolution/<channel>")
+def api_upsert_variable_resolution(channel: str) -> Any:
+    payload = request.get_json(silent=True) or {}
+    if not isinstance(payload, dict):
+        return jsonify({"ok": False, "error": "payload_invalido"}), 400
+    try:
+        data = upsert_variable_resolution_channel(channel, payload)
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    publish_event(
+        source="dashboard_app",
+        stage="VAR_RESOLUCAO_SALVA",
+        status="ok",
+        detail=f"Resolução de variáveis salva para {channel}",
+        payload={"channel": channel},
+    )
+    return jsonify({"ok": True, "variable_resolution": data})
+
+
+@app.put("/api/message-templates/custom-variables/<channel>")
+def api_upsert_custom_variables(channel: str) -> Any:
+    payload = request.get_json(silent=True) or {}
+    items = payload.get("items")
+    if not isinstance(items, list):
+        return jsonify({"ok": False, "error": "items_obrigatorio_lista"}), 400
+    try:
+        saved = upsert_custom_variables_channel(channel, items)
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    publish_event(
+        source="dashboard_app",
+        stage="CUSTOM_VARS_SALVAS",
+        status="ok",
+        detail=f"Variáveis personalizadas salvas para {channel}",
+        payload={"channel": channel},
+    )
+    return jsonify({"ok": True, "items": saved})
 
 
 @app.post("/api/harness/simulate-webhook")

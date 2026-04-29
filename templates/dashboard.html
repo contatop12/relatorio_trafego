@@ -403,6 +403,55 @@
           <p id="templateFeedback" class="feedback"></p>
         </section>
 
+        <section class="panel" id="varResolutionSection">
+          <div class="panel-title-wrap">
+            <h2>Origem dos campos (webhook)</h2>
+            <p>
+              Defina a ordem de chaves do payload / formulário para cada variável de lead. Aplica-se a
+              <code>meta_lead</code> e <code>site_lead</code>.
+            </p>
+          </div>
+          <div class="new-client-filters-grid" style="align-items: end">
+            <label>
+              Canal
+              <select id="varResChannel" class="field-select">
+                <option value="meta_lead">meta_lead</option>
+                <option value="site_lead">site_lead</option>
+              </select>
+            </label>
+          </div>
+          <div id="varResolutionGrid" class="var-resolution-grid" aria-live="polite"></div>
+          <div class="new-client-actions">
+            <button type="button" class="primary" id="varResSaveBtn">Salvar chaves de origem</button>
+          </div>
+          <p id="varResFeedback" class="feedback"></p>
+        </section>
+
+        <section class="panel" id="customVarsSection">
+          <div class="panel-title-wrap">
+            <h2>Variáveis personalizadas</h2>
+            <p>
+              Crie <code>{{nome}}</code> próprio: indique as chaves de onde ler o valor e um mapa valor bruto → texto
+              exibido (ex.: código interno → nome amigável).
+            </p>
+          </div>
+          <div class="new-client-filters-grid" style="align-items: end">
+            <label>
+              Canal
+              <select id="customVarsChannel" class="field-select">
+                <option value="meta_lead">meta_lead</option>
+                <option value="site_lead">site_lead</option>
+              </select>
+            </label>
+          </div>
+          <div id="customVarsList" class="custom-vars-list"></div>
+          <div class="new-client-actions">
+            <button type="button" class="ghost" id="customVarsAddBtn">Adicionar variável</button>
+            <button type="button" class="primary" id="customVarsSaveBtn">Salvar variáveis personalizadas</button>
+          </div>
+          <p id="customVarsFeedback" class="feedback"></p>
+        </section>
+
         <section class="panel">
           <div class="filters-panel-head">
             <div class="panel-title-wrap filters-panel-titles">

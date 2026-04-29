@@ -8,9 +8,89 @@ import json
 import os
 import re
 from copy import deepcopy
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional, Tuple
 
 from execution.project_paths import ensure_data_dir, message_templates_json_path
+
+_VAR_NAME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9_]*$")
+
+# Chaves do documento JSON/DB que não são canais de template
+_DOC_KEYS = frozenset({"filters", "variable_resolution", "custom_variables"})
+
+# Variáveis de lead cujo valor vem de chaves do payload (não derivadas). Usado em meta_lead / site_lead.
+LEAD_RESOLVABLE_SLOTS = frozenset(
+    {
+        "nome",
+        "email",
+        "whatsapp",
+        "telefone_digitos",
+        "page_path",
+        "utm_source",
+        "utm_medium",
+        "utm_campaign",
+        "utm_term",
+        "utm_content",
+    }
+)
+
+# Defaults alinhados a execution/meta_lead_webhook.py (ordem de tentativa)
+_DEFAULT_LEAD_SOURCE_KEYS: Dict[str, Tuple[str, ...]] = {
+    "nome": ("nome_completo", "nome", "full_name", "name"),
+    "email": ("email",),
+    "whatsapp": ("telefone", "phone_number", "phone", "mobile", "celular"),
+    "telefone_digitos": ("telefone", "phone_number", "phone", "mobile", "celular"),
+    "page_path": (
+        "pagina",
+        "page",
+        "page_path",
+        "pagePath",
+        "path",
+        "pathname",
+        "url",
+        "url_path",
+        "landing_page",
+        "landingPage",
+        "landing_url",
+    ),
+    "utm_source": ("utm_source", "utmSource"),
+    "utm_medium": ("utm_medium", "utmMedium"),
+    "utm_campaign": ("utm_campaign", "utmCampaign"),
+    "utm_term": ("utm_term", "utmTerm"),
+    "utm_content": ("utm_content", "utmContent"),
+}
+
+# Nomes de variável já usados no contexto de lead (não permitir colisão com variável personalizada)
+_RESERVED_LEAD_RENDER_KEYS = frozenset(
+    {
+        "client_name",
+        "page_id",
+        "template_id",
+        "nome",
+        "email",
+        "whatsapp",
+        "telefone_digitos",
+        "form_name",
+        "page_path",
+        "utm_source",
+        "utm_medium",
+        "utm_campaign",
+        "utm_term",
+        "utm_content",
+        "traffic_source",
+        "traffic_origin_url",
+        "origem_anuncio",
+        "cliente_origem",
+        "respostas",
+        "respostas_filtradas",
+        "respostas_raw",
+        "respostas_omitidas",
+        "respostas_count",
+        "respostas_raw_count",
+        "respostas_omitidas_count",
+        "received_at",
+        "chegada_em",
+    }
+)
 
 _VAR_RE = re.compile(r"\{\{\s*([a-zA-Z0-9_]+)\s*\}\}")
 
@@ -325,7 +405,7 @@ def _use_db_templates() -> bool:
 
 
 def _channels_from_raw(raw: Dict[str, Any]) -> Dict[str, Any]:
-    return {k: v for k, v in raw.items() if k != "filters" and isinstance(v, dict)}
+    return {k: v for k, v in raw.items() if k not in _DOC_KEYS and isinstance(v, dict)}
 
 
 def load_templates() -> Dict[str, Dict[str, Dict[str, str]]]:
@@ -376,6 +456,8 @@ def list_templates_payload() -> Dict[str, Any]:
         "channels": templates,
         "variables": TEMPLATE_VARIABLES,
         "filters": filters,
+        "variable_resolution": load_merged_variable_resolution(),
+        "custom_variables": load_merged_custom_variables(),
     }
 
 
@@ -553,3 +635,229 @@ def upsert_filter_rules(
         json.dump(data, f, ensure_ascii=False, indent=2)
         f.write("\n")
     return filters_entry
+
+
+def _load_full_templates_document() -> Dict[str, Any]:
+    if _use_db_templates():
+        from execution.persistence import ensure_db_ready, get_message_templates_body
+
+        ensure_db_ready()
+        raw = get_message_templates_body()
+        return raw if isinstance(raw, dict) else {}
+    path = _templates_path()
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def _save_full_templates_document(data: Dict[str, Any]) -> None:
+    if _use_db_templates():
+        from execution.persistence import save_message_templates_body
+
+        save_message_templates_body(data)
+        return
+    ensure_data_dir()
+    path = _templates_path()
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+        f.write("\n")
+
+
+def _default_variable_resolution() -> Dict[str, Dict[str, Dict[str, Any]]]:
+    slot_defaults = {
+        slot: {"source_keys": list(keys)} for slot, keys in _DEFAULT_LEAD_SOURCE_KEYS.items()
+    }
+    return {"meta_lead": deepcopy(slot_defaults), "site_lead": deepcopy(slot_defaults)}
+
+
+def load_merged_variable_resolution() -> Dict[str, Dict[str, Dict[str, Any]]]:
+    out = _default_variable_resolution()
+    raw_doc = _load_full_templates_document()
+    stored = raw_doc.get("variable_resolution")
+    if not isinstance(stored, dict):
+        return out
+    for ch in ("meta_lead", "site_lead"):
+        over = stored.get(ch)
+        if not isinstance(over, dict):
+            continue
+        for var_name, meta in over.items():
+            if var_name not in LEAD_RESOLVABLE_SLOTS or not isinstance(meta, dict):
+                continue
+            sk = meta.get("source_keys")
+            if isinstance(sk, list) and sk:
+                clean = [str(x).strip() for x in sk if str(x).strip()]
+                if clean:
+                    out[ch][var_name] = {"source_keys": clean}
+    return out
+
+
+def resolution_channel_for_lead(template_channel: str) -> str:
+    """internal_lead partilha resolução com meta_lead."""
+    c = (template_channel or "meta_lead").strip() or "meta_lead"
+    if c == "internal_lead":
+        return "meta_lead"
+    if c == "site_lead":
+        return "site_lead"
+    return "meta_lead"
+
+
+def get_effective_source_keys(channel: str, slot: str) -> Tuple[str, ...]:
+    if slot not in LEAD_RESOLVABLE_SLOTS:
+        return ()
+    ch = resolution_channel_for_lead(channel)
+    merged = load_merged_variable_resolution()
+    bucket = merged.get(ch) or {}
+    entry = bucket.get(slot) or {}
+    sk = entry.get("source_keys")
+    if isinstance(sk, list) and sk:
+        t = tuple(str(x).strip() for x in sk if str(x).strip())
+        if t:
+            return t
+    return _DEFAULT_LEAD_SOURCE_KEYS.get(slot, ())
+
+
+def _validate_custom_variable_entry(item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    key = str(item.get("key", "")).strip()
+    if not key or not _VAR_NAME_RE.match(key):
+        return None
+    if key in _RESERVED_LEAD_RENDER_KEYS:
+        return None
+    sk = item.get("source_keys")
+    if not isinstance(sk, list) or not sk:
+        return None
+    source_keys = [str(x).strip() for x in sk if str(x).strip()]
+    if not source_keys:
+        return None
+    mappings = item.get("mappings")
+    if mappings is None:
+        mappings = {}
+    if not isinstance(mappings, dict):
+        return None
+    map_str = {str(k): str(v) for k, v in mappings.items()}
+    default = str(item.get("default", ""))
+    norm = item.get("normalize")
+    if not isinstance(norm, dict):
+        norm = {"trim": True, "lower": False}
+    return {"key": key, "source_keys": source_keys, "mappings": map_str, "default": default, "normalize": norm}
+
+
+def load_merged_custom_variables() -> Dict[str, List[Dict[str, Any]]]:
+    out: Dict[str, List[Dict[str, Any]]] = {"meta_lead": [], "site_lead": []}
+    raw_doc = _load_full_templates_document()
+    stored = raw_doc.get("custom_variables")
+    if not isinstance(stored, dict):
+        return out
+    for ch in ("meta_lead", "site_lead"):
+        raw_list = stored.get(ch)
+        if not isinstance(raw_list, list):
+            continue
+        seen: set[str] = set()
+        for item in raw_list:
+            if not isinstance(item, dict):
+                continue
+            ent = _validate_custom_variable_entry(item)
+            if not ent or ent["key"] in seen:
+                continue
+            seen.add(ent["key"])
+            out[ch].append(ent)
+    return out
+
+
+def get_custom_variable_defs_for_channel(template_channel: str) -> List[Dict[str, Any]]:
+    ch = resolution_channel_for_lead(template_channel)
+    all_cv = load_merged_custom_variables()
+    return list(all_cv.get(ch, []))
+
+
+def map_custom_variable_display(
+    raw: str,
+    mappings: Dict[str, str],
+    *,
+    default: str = "",
+    normalize: Optional[Dict[str, Any]] = None,
+) -> str:
+    norm = normalize if isinstance(normalize, dict) else {}
+    use_lower = bool(norm.get("lower"))
+    use_trim = bool(norm.get("trim", True))
+
+    def norm_key(s: str) -> str:
+        t = s.strip() if use_trim else s
+        return t.lower() if use_lower else t
+
+    raw_stripped = (raw or "").strip()
+    if not mappings:
+        return raw_stripped if raw_stripped else default
+
+    if not raw_stripped:
+        return default
+
+    rk = norm_key(raw_stripped)
+    for mk, mv in mappings.items():
+        if norm_key(str(mk)) == rk:
+            return str(mv)
+    return default if default else raw_stripped
+
+
+def upsert_variable_resolution_channel(channel: str, payload: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    ch = (channel or "").strip()
+    if ch not in ("meta_lead", "site_lead"):
+        raise ValueError("channel_resolution_invalido")
+    bucket: Dict[str, Dict[str, Any]] = {}
+    for var_name, meta in (payload or {}).items():
+        if var_name not in LEAD_RESOLVABLE_SLOTS:
+            continue
+        if not isinstance(meta, dict):
+            continue
+        sk = meta.get("source_keys")
+        if not isinstance(sk, list):
+            continue
+        clean = [str(x).strip() for x in sk if str(x).strip()]
+        if not clean:
+            continue
+        bucket[var_name] = {"source_keys": clean}
+
+    data = _load_full_templates_document()
+    vr = data.get("variable_resolution")
+    if not isinstance(vr, dict):
+        vr = {}
+    vr[ch] = bucket
+    data["variable_resolution"] = vr
+    _save_full_templates_document(data)
+    merged = load_merged_variable_resolution()
+    return merged.get(ch, {})
+
+
+def upsert_custom_variables_channel(channel: str, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    ch = (channel or "").strip()
+    if ch not in ("meta_lead", "site_lead"):
+        raise ValueError("channel_custom_vars_invalido")
+    cleaned: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        ent = _validate_custom_variable_entry(item)
+        if not ent or ent["key"] in seen:
+            continue
+        seen.add(ent["key"])
+        cleaned.append(ent)
+
+    data = _load_full_templates_document()
+    cv = data.get("custom_variables")
+    if not isinstance(cv, dict):
+        cv = {}
+    cv[ch] = cleaned
+    data["custom_variables"] = cv
+    _save_full_templates_document(data)
+    return load_merged_custom_variables().get(ch, [])
+
+
+def list_template_placeholder_keys(content: str) -> List[str]:
+    if not content:
+        return []
+    return list(dict.fromkeys(_VAR_RE.findall(content or "")))

@@ -29,7 +29,15 @@ from execution.evolution_client import get_evolution_client
 from execution import dashboard_app as dashboard_module
 from execution.flask_server import serve_flask_app
 from execution.live_events import publish_event
-from execution.message_templates import get_filter_rules, get_template_content, render_internal_lead_notify, render_template_text
+from execution.message_templates import (
+    get_custom_variable_defs_for_channel,
+    get_effective_source_keys,
+    get_filter_rules,
+    get_template_content,
+    map_custom_variable_display,
+    render_internal_lead_notify,
+    render_template_text,
+)
 from execution.project_paths import clients_json_path, google_clients_json_path
 
 log_dir = os.path.join(os.path.dirname(__file__), "..", ".tmp")
@@ -70,22 +78,6 @@ _EXCLUDE_RESPOSTAS = frozenset(
         "page_id",
         "pageId",
     }
-)
-# Ordem: legado Meta PT primeiro; depois chaves comuns em formulários instantâneos / Make.
-_LEAD_NAME_FIELD_KEYS = ("nome_completo", "nome", "full_name", "name")
-_LEAD_PHONE_FIELD_KEYS = ("telefone", "phone_number", "phone", "mobile", "celular")
-_PAGE_PATH_FIELD_KEYS = (
-    "pagina",
-    "page",
-    "page_path",
-    "pagePath",
-    "path",
-    "pathname",
-    "url",
-    "url_path",
-    "landing_page",
-    "landingPage",
-    "landing_url",
 )
 _TRAFFIC_EXPLICIT_KEYS = ("traffic_source", "fonte", "trafego", "canal_trafego", "source")
 _URL_HINT_KEYS = (
@@ -132,11 +124,6 @@ _META_TOKENS = (
     "fbbusiness",
     "fbinstagram",
 )
-_UTM_SOURCE_FIELD_KEYS = ("utm_source", "utmSource")
-_UTM_MEDIUM_FIELD_KEYS = ("utm_medium", "utmMedium")
-_UTM_CAMPAIGN_FIELD_KEYS = ("utm_campaign", "utmCampaign")
-_UTM_TERM_FIELD_KEYS = ("utm_term", "utmTerm")
-_UTM_CONTENT_FIELD_KEYS = ("utm_content", "utmContent")
 _LEAD_BODY_SIGNAL_KEYS = frozenset(
     {"email", "nome_completo", "telefone", "nome", "full_name", "name", "phone_number", "phone", "mobile", "celular"}
 )
@@ -1131,27 +1118,53 @@ def _check_webhook_secret() -> Optional[Tuple[Any, int]]:
     return jsonify({"ok": False, "error": "unauthorized"}), 401
 
 
+def _inject_custom_variables_into_ctx(
+    ctx: Dict[str, str],
+    body: Dict[str, Any],
+    route: Optional[Dict[str, Any]],
+) -> None:
+    """Preenche variáveis personalizadas (message_templates.custom_variables) no contexto de render."""
+    data = body.get("data") if isinstance(body.get("data"), dict) else {}
+    mappable = _ensure_mappable(body, data)
+    fc = str((route or {}).get("template_channel") or "meta_lead").strip() or "meta_lead"
+    for defn in get_custom_variable_defs_for_channel(fc):
+        raw = _first_field_from_data_and_mappable(tuple(defn["source_keys"]), data, mappable)
+        ctx[str(defn["key"])] = map_custom_variable_display(
+            raw,
+            defn.get("mappings") or {},
+            default=str(defn.get("default", "")),
+            normalize=defn.get("normalize"),
+        )
+
+
 def _base_message_fields(body: Dict[str, Any], route: Optional[Dict[str, Any]] = None) -> Dict[str, str]:
     data = body.get("data") if isinstance(body.get("data"), dict) else {}
     mappable = _ensure_mappable(body, data)
-    global_rules = get_filter_rules("meta_lead")
+    fc = str((route or {}).get("template_channel") or "meta_lead").strip() or "meta_lead"
+    filter_channel = fc if fc in ("meta_lead", "site_lead") else "meta_lead"
+    global_rules = get_filter_rules(filter_channel)
     client_rules = {
         "exclude_exact": [str(v).strip().lower() for v in ((route or {}).get("exclude_exact") or []) if str(v).strip()],
         "exclude_contains": [str(v).strip().lower() for v in ((route or {}).get("exclude_contains") or []) if str(v).strip()],
         "exclude_regex": [str(v).strip() for v in ((route or {}).get("exclude_regex") or []) if str(v).strip()],
     }
 
-    nome = _first_field_from_data_and_mappable(_LEAD_NAME_FIELD_KEYS, data, mappable)
-    email = _format_field_value(data.get("email")) or _mappable_lookup(mappable, "email")
-    telefone_raw = _first_field_from_data_and_mappable(_LEAD_PHONE_FIELD_KEYS, data, mappable)
+    nome = _first_field_from_data_and_mappable(tuple(get_effective_source_keys(fc, "nome")), data, mappable)
+    email = _first_field_from_data_and_mappable(tuple(get_effective_source_keys(fc, "email")), data, mappable)
+    if not email:
+        email = _format_field_value(data.get("email")) or _mappable_lookup(mappable, "email")
+    telefone_raw = _first_field_from_data_and_mappable(tuple(get_effective_source_keys(fc, "whatsapp")), data, mappable)
+    telefone_raw_d = _first_field_from_data_and_mappable(tuple(get_effective_source_keys(fc, "telefone_digitos")), data, mappable)
+    if not telefone_raw_d:
+        telefone_raw_d = telefone_raw
     wa_link = _format_whatsapp_line(telefone_raw)
-    telefone_digitos = _digits_only(telefone_raw)
-    page_path = _first_field_from_data_and_mappable(_PAGE_PATH_FIELD_KEYS, data, mappable)
-    utm_source = _first_field_from_data_and_mappable(_UTM_SOURCE_FIELD_KEYS, data, mappable)
-    utm_medium = _first_field_from_data_and_mappable(_UTM_MEDIUM_FIELD_KEYS, data, mappable)
-    utm_campaign = _first_field_from_data_and_mappable(_UTM_CAMPAIGN_FIELD_KEYS, data, mappable)
-    utm_term = _first_field_from_data_and_mappable(_UTM_TERM_FIELD_KEYS, data, mappable)
-    utm_content = _first_field_from_data_and_mappable(_UTM_CONTENT_FIELD_KEYS, data, mappable)
+    telefone_digitos = _digits_only(telefone_raw_d)
+    page_path = _first_field_from_data_and_mappable(tuple(get_effective_source_keys(fc, "page_path")), data, mappable)
+    utm_source = _first_field_from_data_and_mappable(tuple(get_effective_source_keys(fc, "utm_source")), data, mappable)
+    utm_medium = _first_field_from_data_and_mappable(tuple(get_effective_source_keys(fc, "utm_medium")), data, mappable)
+    utm_campaign = _first_field_from_data_and_mappable(tuple(get_effective_source_keys(fc, "utm_campaign")), data, mappable)
+    utm_term = _first_field_from_data_and_mappable(tuple(get_effective_source_keys(fc, "utm_term")), data, mappable)
+    utm_content = _first_field_from_data_and_mappable(tuple(get_effective_source_keys(fc, "utm_content")), data, mappable)
 
     respostas_bundle = _build_respostas_bundle(
         mappable,
@@ -1466,6 +1479,7 @@ def _format_lead_message(
             "received_at": base["received_at"],
             "chegada_em": base["chegada_em"],
         }
+        _inject_custom_variables_into_ctx(render_ctx, body, route)
         rendered = render_template_text(
             custom_content,
             render_ctx,
@@ -1791,6 +1805,7 @@ def _handle_meta_new_lead(endpoint_label: str, allow_legacy_lorena_fallback: boo
                     "received_at": base_fields["received_at"],
                     "chegada_em": base_fields["chegada_em"],
                 }
+                _inject_custom_variables_into_ctx(int_ctx, body, route)
                 int_body = render_internal_lead_notify(route, int_ctx)
                 if int_body.strip() and not client.send_text_message(int_gid, int_body):
                     logger.warning(
