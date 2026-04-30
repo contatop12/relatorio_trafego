@@ -2141,6 +2141,21 @@ def dash_api_message_template_preview():
     return dashboard_module.api_message_template_preview()
 
 
+@app.post("/dash/api/message-templates/custom-variable-preview")
+def dash_api_custom_variable_transformation_preview():
+    return dashboard_module.api_custom_variable_transformation_preview()
+
+
+@app.put("/dash/api/message-templates/variable-resolution/<channel>")
+def dash_api_upsert_variable_resolution(channel: str):
+    return dashboard_module.api_upsert_variable_resolution(channel)
+
+
+@app.put("/dash/api/message-templates/custom-variables/<channel>")
+def dash_api_upsert_custom_variables(channel: str):
+    return dashboard_module.api_upsert_custom_variables(channel)
+
+
 @app.post("/dash/api/harness/simulate-webhook")
 def dash_api_harness_simulate_webhook():
     return dashboard_module.api_harness_simulate_webhook()

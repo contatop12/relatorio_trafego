@@ -48,7 +48,12 @@ const apiUrl = (path) => {
 };
 
 function dashFetch(input, init) {
-  const next = { credentials: "same-origin", ...(init || {}) };
+  const meth = String((init && init.method) || "GET").toUpperCase();
+  const next = {
+    credentials: "same-origin",
+    ...(meth === "GET" ? { cache: "no-store" } : {}),
+    ...(init || {}),
+  };
   return fetch(input, next).then((r) => {
     if (r.status === 401) {
       const base = DASHBOARD_BASE || "";
@@ -1206,7 +1211,13 @@ function renderMetaClients() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const body = await resp.json();
+      let body = {};
+      try {
+        body = await resp.json();
+      } catch {
+        editFeedback.textContent = `Erro ao salvar: resposta inválida (HTTP ${resp.status}). Verifique rede / proxy.`;
+        return;
+      }
       if (!resp.ok || !body.ok) {
         editFeedback.textContent = `Erro ao salvar: ${body.error || "desconhecido"}`;
         return;
@@ -1303,7 +1314,13 @@ function renderGoogleClients() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const body = await resp.json();
+      let body = {};
+      try {
+        body = await resp.json();
+      } catch {
+        feedback.textContent = `Erro ao salvar: resposta inválida (HTTP ${resp.status}). Verifique rede / proxy.`;
+        return;
+      }
       if (!resp.ok || !body.ok) {
         feedback.textContent = `Erro ao salvar: ${body.error || "desconhecido"}`;
         return;
@@ -1838,7 +1855,13 @@ function buildCustomVarCardEl(item, idx, templateChannel, _bucket) {
         normalize: { trim: trimCk.checked, lower: lowerCk.checked },
       }),
     });
-    const b = await r.json();
+    let b = {};
+    try {
+      b = await r.json();
+    } catch {
+      prevOut.textContent = `HTTP ${r.status} (rota /dash/api/message-templates/custom-variable-preview em falta no servidor?)`;
+      return;
+    }
     prevOut.textContent = b.ok && b.result != null ? b.result : b.error || "falha";
   });
   previewRow.append(document.createTextNode("Teste: "), rawTest, prevBtn, document.createTextNode(" → "), prevOut);
@@ -1945,7 +1968,13 @@ async function saveVariableResolution() {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  const body = await r.json();
+  let body = {};
+  try {
+    body = await r.json();
+  } catch {
+    fb.textContent = `Erro: resposta inválida (HTTP ${r.status}). A rota /dash/api/… existe no servidor?`;
+    return;
+  }
   if (!r.ok || !body.ok) {
     fb.textContent = `Erro: ${body.error || "falha ao salvar"}`;
     return;
@@ -2011,7 +2040,13 @@ async function saveCustomVariables() {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ items }),
   });
-  const body = await r.json();
+  let body = {};
+  try {
+    body = await r.json();
+  } catch {
+    fb.textContent = `Erro: resposta inválida (HTTP ${r.status}). A rota /dash/api/… existe no servidor?`;
+    return;
+  }
   if (!r.ok || !body.ok) {
     fb.textContent = `Erro: ${body.error || "falha ao salvar"}`;
     return;
