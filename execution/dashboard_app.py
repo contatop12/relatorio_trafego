@@ -276,8 +276,13 @@ def _csv_list(value: Any) -> List[str]:
     return []
 
 
-def _is_valid_site_codi_id(value: str) -> bool:
-    return bool(re.fullmatch(r"\d{32}", (value or "").strip()))
+# JID de grupo: 120363…@g.us ou 5511…-1621…@g.us (hífen = formato que a Evolution/Baileys expõe em alguns grupos).
+_GROUP_JID_PATTERN = re.compile(r"^[0-9]+(?:-[0-9]+)?@g\.us$")
+
+
+def _whatsapp_group_jid_ok(value: str) -> bool:
+    v = (value or "").strip()
+    return bool(v and _GROUP_JID_PATTERN.fullmatch(v))
 
 
 def _validate_client(client: Dict[str, Any]) -> Dict[str, Any]:
@@ -288,12 +293,12 @@ def _validate_client(client: Dict[str, Any]) -> Dict[str, Any]:
     enabled = bool(client.get("enabled", True))
 
     ad_ok = bool(re.fullmatch(r"act_\d{6,}", ad_account_id))
-    group_ok = bool(re.fullmatch(r"\d+@g\.us", group_id))
-    lead_group_ok = bool(re.fullmatch(r"\d+@g\.us", lead_group_id))
+    group_ok = _whatsapp_group_jid_ok(group_id)
+    lead_group_ok = _whatsapp_group_jid_ok(lead_group_id)
     p12_g = str(client.get("p12_report_group_id", "")).strip()
-    p12_ok = (not p12_g) or bool(re.fullmatch(r"\d+@g\.us", p12_g))
+    p12_ok = (not p12_g) or _whatsapp_group_jid_ok(p12_g)
     int_g = str(client.get("internal_notify_group_id", "")).strip()
-    int_ok = bool(re.fullmatch(r"\d+@g\.us", int_g))
+    int_ok = _whatsapp_group_jid_ok(int_g)
     page_ok = (not page_id) or page_id.isdigit()
     ready_for_report = enabled and ad_ok and group_ok
     ready_for_lead_route = enabled and bool(page_id) and lead_group_ok
@@ -332,11 +337,11 @@ def _validate_google_client(client: Dict[str, Any]) -> Dict[str, Any]:
     group_id = str(client.get("group_id", "")).strip()
     enabled = bool(client.get("enabled", True))
     cid_ok = bool(re.fullmatch(r"\d{3}-\d{3}-\d{4}", customer_id))
-    group_ok = bool(re.fullmatch(r"\d+@g\.us", group_id))
+    group_ok = _whatsapp_group_jid_ok(group_id)
     p12_g = str(client.get("p12_report_group_id", "")).strip()
-    p12_ok = (not p12_g) or bool(re.fullmatch(r"\d+@g\.us", p12_g))
+    p12_ok = (not p12_g) or _whatsapp_group_jid_ok(p12_g)
     int_g = str(client.get("internal_notify_group_id", "")).strip()
-    int_ok = bool(re.fullmatch(r"\d+@g\.us", int_g))
+    int_ok = _whatsapp_group_jid_ok(int_g)
     if not enabled:
         status = "Pausado"
     elif cid_ok and group_ok:
@@ -1290,8 +1295,8 @@ def api_add_site_lead_route() -> Any:
     }
     if not route_data["codi_id"]:
         return jsonify({"ok": False, "error": "codi_id_obrigatorio"}), 400
-    if not _is_valid_site_codi_id(route_data["codi_id"]):
-        return jsonify({"ok": False, "error": "codi_id_invalido_32_digitos_numericos"}), 400
+    if not persistence.is_valid_site_codi_id(route_data["codi_id"]):
+        return jsonify({"ok": False, "error": "codi_id_invalido_formato"}), 400
     if route_data["target_type"] not in {"meta", "google", "site"}:
         return jsonify({"ok": False, "error": "target_type_invalido"}), 400
     if not route_data["group_id"]:
@@ -1377,8 +1382,8 @@ def api_update_site_lead_route(route_id: int) -> Any:
         current["codi_id"] = str(current.get("form_id", "")).strip()
     if not str(current.get("codi_id", "")).strip():
         return jsonify({"ok": False, "error": "codi_id_obrigatorio"}), 400
-    if not _is_valid_site_codi_id(str(current.get("codi_id", ""))):
-        return jsonify({"ok": False, "error": "codi_id_invalido_32_digitos_numericos"}), 400
+    if not persistence.is_valid_site_codi_id(str(current.get("codi_id", ""))):
+        return jsonify({"ok": False, "error": "codi_id_invalido_formato"}), 400
     if str(current.get("target_type", "")).strip() not in {"meta", "google", "site"}:
         return jsonify({"ok": False, "error": "target_type_invalido"}), 400
     if not str(current.get("group_id", "")).strip():

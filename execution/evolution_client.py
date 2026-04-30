@@ -159,7 +159,7 @@ class EvolutionAPIClient:
         caso a Evolution API esteja offline.
         
         Args:
-            group_id: ID do grupo WhatsApp (formato: group_id@g.us)
+            group_id: JID do grupo (ex.: 120363...@g.us ou 5511...-1621...@g.us com hífen, como a API expõe).
             message: Texto da mensagem a ser enviada
             
         Returns:

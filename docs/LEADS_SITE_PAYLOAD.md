@@ -9,7 +9,7 @@ Este webhook aceita leads de site no mesmo endpoint de lead (`/meta-new-lead`), 
 
 ## Campos mínimos
 
-- `codi_id`: identificador único do formulário no site com **exatamente 32 dígitos numéricos** (obrigatório para rota de site)
+- `codi_id`: identificador único do formulário no site com **28 a 36 dígitos numéricos** (obrigatório para rota de site; na prática costuma ter 30–32)
 - `nome`
 - `telefone`
 - `origem`
@@ -31,9 +31,9 @@ Este webhook aceita leads de site no mesmo endpoint de lead (`/meta-new-lead`), 
 
 ## Regras de decisão no webhook
 
-1. Se chegar `page_id` válido, segue o roteamento Meta atual.
-2. Se não houver `page_id` e existir `codi_id`, busca em `site_lead_routes` e monta o envio **a partir do cadastro da rota** (não depende de cliente Meta/Google por nome).
-3. Sem `page_id` e sem `codi_id`, ou `codi_id` sem rota, o lead é bloqueado (sem fallback para cliente errado).
+1. Se existir `codi_id` com formato válido (28–36 dígitos), o roteamento **Lead Site** tem prioridade: procura em `site_lead_routes` e monta o envio a partir do cadastro. Isto evita que um `page_id` do Facebook presente no mesmo payload (ex. n8n/Make) roube o roteamento.
+2. Se não houver `codi_id` utilizável (vazio) e existir `page_id`, segue o roteamento Meta/Ads nativo.
+3. `codi_id` com formato inválido ou sem rota cadastrada bloqueia o lead (sem enviar para outro cliente por `page_id`).
 
 ## Origem de tráfego (templates)
 
@@ -50,5 +50,5 @@ Este webhook aceita leads de site no mesmo endpoint de lead (`/meta-new-lead`), 
 
 - Pode enviar payload plano (campos no topo do JSON) ou com `data`.
 - O `codi_id` precisa existir na aba **Leads Site** do dashboard e o cadastro deve estar ativo, com `group_id`, `lead_phone_number` e `internal_notify_group_id` preenchidos.
-- Se o `codi_id` não tiver 32 dígitos numéricos, o webhook bloqueia o lead (`CODI_ID_INVALID_FORMAT`).
+- Se o `codi_id` não tiver entre 28 e 36 dígitos numéricos, o webhook bloqueia o lead (`CODI_ID_INVALID_FORMAT`).
 - Opcional: `traffic_source` / `fonte` no JSON para forçar a origem exibida na mensagem.

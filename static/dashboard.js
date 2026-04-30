@@ -2186,11 +2186,11 @@ function siteRouteChecks(route) {
     String(route?.cliente_origem || "").trim() || String(route?.origem_anuncio || "").trim() || String(route?.target_client_name || "").trim(),
   );
   return {
-    codiOk: /^\d{32}$/.test(codi),
+    codiOk: /^\d{28,36}$/.test(codi),
     labelOk: hasLabel,
-    groupOk: /^\d+@g\.us$/.test(groupId),
+    groupOk: /^\d+(-\d+)?@g\.us$/.test(groupId),
     phoneOk: phone.length > 0,
-    internalGroupOk: /^\d+@g\.us$/.test(internalGroupId),
+    internalGroupOk: /^\d+(-\d+)?@g\.us$/.test(internalGroupId),
     leadTemplateOk: !!channelSite[leadTpl],
     internalTemplateOk: !intTpl || !!channelInternal[intTpl],
   };
@@ -2286,9 +2286,9 @@ function renderSiteLeadRoutes() {
                   name="codi_id"
                   required
                   inputmode="numeric"
-                  pattern="\\d{32}"
-                  minlength="32"
-                  maxlength="32"
+                  pattern="[0-9]{28,36}"
+                  minlength="28"
+                  maxlength="36"
                 />
               </label>
               <label class="edit-field edit-field--full">

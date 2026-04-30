@@ -733,12 +733,12 @@
                   name="codi_id"
                   required
                   inputmode="numeric"
-                  pattern="\d{32}"
-                  minlength="32"
-                  maxlength="32"
+                  pattern="[0-9]{28,36}"
+                  minlength="28"
+                  maxlength="36"
                   placeholder="Ex.: 12345678901234567890123456789012"
                 />
-                <span class="field-hint">Obrigatório: exatamente 32 dígitos numéricos (codi_id).</span>
+                <span class="field-hint">Obrigatório: 28 a 36 dígitos numéricos (codi_id do site).</span>
               </label>
               <label>
                 Rótulo interno — identificação / campanha

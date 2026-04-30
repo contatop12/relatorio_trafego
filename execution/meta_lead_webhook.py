@@ -26,6 +26,7 @@ from flask import Flask, Response, jsonify, redirect, render_template, request, 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from execution.evolution_client import get_evolution_client
+from execution.persistence import is_valid_site_codi_id
 from execution import dashboard_app as dashboard_module
 from execution.flask_server import serve_flask_app
 from execution.live_events import publish_event
@@ -906,10 +907,6 @@ def _extract_native_form_id_from_body(body: Dict[str, Any]) -> str:
     return ""
 
 
-def _is_valid_site_codi_id(value: str) -> bool:
-    return bool(re.fullmatch(r"\d{32}", (value or "").strip()))
-
-
 def _fold_ascii_lower(s: str) -> str:
     s = (s or "").lower()
     return "".join(
@@ -1046,23 +1043,23 @@ def _resolve_site_lead_route(codi_id: str) -> Optional[Dict[str, Any]]:
 def _resolve_route_with_context(page_id: str, codi_id: str) -> Tuple[Optional[Dict[str, Any]], str, str, str]:
     """
     Organização explícita de contexto de roteamento:
-    - native_ads: usa page_id (Meta/Google nativo)
-    - site: usa codi_id (leads de site)
+    - Leads de site: codi_id tem prioridade sobre page_id (Make costuma enviar ambos).
+    - native_ads: usa page_id (Meta/Google nativo) quando não há rota por codi_id.
     """
-    if page_id:
-        return _resolve_lead_route(page_id), "native_ads", "PAGE_ID_SEM_CLIENTE_NA_PULSEBOARD", _configured_meta_pages_hint()
     if codi_id:
-        if not _is_valid_site_codi_id(codi_id):
+        if not is_valid_site_codi_id(codi_id):
             return (
                 None,
                 "site",
                 "CODI_ID_INVALID_FORMAT",
-                f"codi_id_recebido={codi_id} (esperado: 32 dígitos numéricos)",
+                f"codi_id_recebido={codi_id} (esperado: 28–36 dígitos numéricos)",
             )
         route = _resolve_site_lead_route(codi_id)
         if route:
             return route, "site", "", ""
         return None, "site", "CODI_ID_ROUTE_NOT_FOUND", f"codi_id_recebido={codi_id}"
+    if page_id:
+        return _resolve_lead_route(page_id), "native_ads", "PAGE_ID_SEM_CLIENTE_NA_PULSEBOARD", _configured_meta_pages_hint()
     return None, "unknown", "ROUTING_KEY_MISSING", "Envie page_id (Meta/Ads) ou codi_id (Lead Site)"
 
 

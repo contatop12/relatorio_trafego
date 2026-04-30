@@ -987,8 +987,9 @@ def _site_route_row(row: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _is_valid_site_codi_id(value: str) -> bool:
-    return bool(re.fullmatch(r"\d{32}", (value or "").strip()))
+# Identificador do formulário no site: na prática vê-se 30–32 dígitos; aceitamos 28–36 só numéricos.
+def is_valid_site_codi_id(value: str) -> bool:
+    return bool(re.fullmatch(r"\d{28,36}", (value or "").strip()))
 
 
 def list_site_lead_routes() -> List[Dict[str, Any]]:
@@ -1041,8 +1042,8 @@ def insert_site_lead_route(data: Dict[str, Any]) -> int:
     codi_id = str(data.get("codi_id") or data.get("form_id") or "").strip()
     if not codi_id:
         raise ValueError("codi_id_obrigatorio")
-    if not _is_valid_site_codi_id(codi_id):
-        raise ValueError("codi_id_invalido_32_digitos_numericos")
+    if not is_valid_site_codi_id(codi_id):
+        raise ValueError("codi_id_invalido_formato")
     if db_enabled():
         with _connect() as conn:
             with conn.cursor() as cur:
@@ -1125,8 +1126,8 @@ def update_site_lead_route(route_id: int, data: Dict[str, Any]) -> None:
     codi_id = str(data.get("codi_id") or data.get("form_id") or "").strip()
     if not codi_id:
         raise ValueError("codi_id_obrigatorio")
-    if not _is_valid_site_codi_id(codi_id):
-        raise ValueError("codi_id_invalido_32_digitos_numericos")
+    if not is_valid_site_codi_id(codi_id):
+        raise ValueError("codi_id_invalido_formato")
     if db_enabled():
         with _connect() as conn:
             with conn.cursor() as cur:
