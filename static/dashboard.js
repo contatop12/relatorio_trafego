@@ -188,7 +188,7 @@ function syncMetaCatalogSelects() {
       const cl = state.metaClients.find((x) => String(x.id) === String(card.dataset.clientId));
       if (cl?.ad_account_id) preferred = String(cl.ad_account_id).trim();
     }
-    fillMetaSelect(sel, accItems, preferred, "— Escolher conta —");
+    fillMetaSelect(sel, accItems, preferred, "Nenhum");
   });
 
   document.querySelectorAll("select.meta-catalog-page-select").forEach((sel) => {
@@ -472,9 +472,17 @@ function metaLeadTemplateBucket() {
 /** Preenche o select `lead_template` com integrados e templates do arquivo/API. */
 function populateLeadTemplateSelect(selectEl, currentValue) {
   if (!selectEl) return;
-  const cur = String(currentValue || "default").trim() || "default";
+  const cur =
+    currentValue === undefined || currentValue === null
+      ? ""
+      : String(currentValue).trim();
   const bucket = metaLeadTemplateBucket();
   selectEl.innerHTML = "";
+
+  const none = document.createElement("option");
+  none.value = "";
+  none.textContent = "Nenhum";
+  selectEl.appendChild(none);
 
   const mkOptgroup = (label) => {
     const og = document.createElement("optgroup");
@@ -513,23 +521,28 @@ function populateLeadTemplateSelect(selectEl, currentValue) {
     selectEl.appendChild(customOg);
   }
 
-  const known = new Set([...META_LEAD_BUILTIN_IDS, ...Object.keys(bucket)]);
-  if (!known.has(cur)) {
+  const known = new Set([...META_LEAD_BUILTIN_IDS, ...Object.keys(bucket), ""]);
+  if (cur && !known.has(cur)) {
     const orphan = document.createElement("option");
     orphan.value = cur;
     orphan.textContent = `ID salvo no cliente (não listado): ${cur}`;
-    selectEl.insertBefore(orphan, selectEl.firstChild);
+    selectEl.appendChild(orphan);
   }
-  selectEl.value = cur;
+  if (cur === "") {
+    selectEl.value = "";
+  } else {
+    selectEl.value = cur || "default";
+  }
 }
 
 function populateSiteLeadTemplateSelect(selectEl, currentValue) {
+  const raw = currentValue === undefined || currentValue === null ? "" : String(currentValue).trim();
   populateChannelTemplateSelect(
     selectEl,
     "site_lead",
     SITE_LEAD_BUILTIN_IDS,
-    String(currentValue || "default").trim() || "default",
-    false
+    raw === "" ? "" : raw || "default",
+    true
   );
 }
 
@@ -898,15 +911,15 @@ function refreshGoogleP12TemplateSelects() {
 
 function refreshLeadTemplateSelects() {
   const newSel = document.getElementById("newClientLeadTemplate");
-  if (newSel) populateLeadTemplateSelect(newSel, newSel.value || "default");
+  if (newSel) populateLeadTemplateSelect(newSel, newSel.value || "");
   const siteSel = document.querySelector('#siteLeadRouteForm select[name="lead_template"]');
-  if (siteSel) populateSiteLeadTemplateSelect(siteSel, siteSel.value || "default");
+  if (siteSel) populateSiteLeadTemplateSelect(siteSel, siteSel.value || "");
 
   document.querySelectorAll('.edit-form select[name="lead_template"]').forEach((sel) => {
     const card = sel.closest(".client-card");
     const cid = card?.dataset?.clientId;
     const client = state.metaClients.find((c) => String(c.id) === String(cid));
-    populateLeadTemplateSelect(sel, client?.lead_template || sel.value || "default");
+    populateLeadTemplateSelect(sel, client?.lead_template ?? sel.value ?? "");
   });
   refreshMetaReportTemplateSelects();
   refreshGoogleP12TemplateSelects();
@@ -1144,7 +1157,7 @@ function renderMetaClients() {
     checks.appendChild(checkPill("ad_account_id", !!client.checks?.ad_account_ok));
     checks.appendChild(checkPill("group_id", !!client.checks?.group_id_ok));
     checks.appendChild(checkPill("meta_page_id", !!client.checks?.meta_page_id_ok));
-    checks.appendChild(checkPill("telefone_cliente", !!String(client.lead_phone_number || "").trim()));
+    checks.appendChild(checkPill("telefone_cliente (opcional)", true));
     checks.appendChild(checkPill("p12_report_group_id", !!client.checks?.p12_report_group_id_ok));
     checks.appendChild(checkPill("interno", !!client.checks?.internal_notify_group_id_ok));
 
@@ -1158,7 +1171,7 @@ function renderMetaClients() {
     editForm.elements.client_name.value = client.client_name || "";
     editForm.elements.group_id.value = client.group_id || "";
     editForm.elements.lead_phone_number.value = client.lead_phone_number || "";
-    populateLeadTemplateSelect(editForm.querySelector('select[name="lead_template"]'), client.lead_template);
+    populateLeadTemplateSelect(editForm.querySelector('select[name="lead_template"]'), client.lead_template ?? "");
     editForm.elements.lead_exclude_fields.value = (client.lead_exclude_fields || []).join(", ");
     editForm.elements.lead_exclude_contains.value = (client.lead_exclude_contains || []).join(", ");
     editForm.elements.lead_exclude_regex.value = (client.lead_exclude_regex || []).join(", ");
@@ -2188,9 +2201,9 @@ function siteRouteChecks(route) {
   return {
     codiOk: /^\d{28,36}$/.test(codi),
     labelOk: hasLabel,
-    groupOk: /^\d+(-\d+)?@g\.us$/.test(groupId),
-    phoneOk: phone.length > 0,
-    internalGroupOk: /^\d+(-\d+)?@g\.us$/.test(internalGroupId),
+    groupOk: !groupId || /^\d+(-\d+)?@g\.us$/.test(groupId),
+    phoneOk: true,
+    internalGroupOk: !internalGroupId || /^\d+(-\d+)?@g\.us$/.test(internalGroupId),
     leadTemplateOk: !!channelSite[leadTpl],
     internalTemplateOk: !intTpl || !!channelInternal[intTpl],
   };
@@ -2269,7 +2282,7 @@ function renderSiteLeadRoutes() {
             <span class="check-pill ${checks.codiOk ? "ok" : "error"}">${checks.codiOk ? "OK" : "ERRO"} · codi_id</span>
             <span class="check-pill ${checks.labelOk ? "ok" : "error"}">${checks.labelOk ? "OK" : "aviso"} · rótulo interno</span>
             <span class="check-pill ${checks.groupOk ? "ok" : "error"}">${checks.groupOk ? "OK" : "ERRO"} · group_id</span>
-            <span class="check-pill ${checks.phoneOk ? "ok" : "error"}">${checks.phoneOk ? "OK" : "ERRO"} · telefone_cliente</span>
+            <span class="check-pill ok">OK · telefone_cliente (opcional)</span>
             <span class="check-pill ${checks.internalGroupOk ? "ok" : "error"}">${checks.internalGroupOk ? "OK" : "ERRO"} · grupo_interno</span>
             <span class="check-pill ${checks.leadTemplateOk ? "ok" : "error"}">${checks.leadTemplateOk ? "OK" : "ERRO"} · template site</span>
             <span class="check-pill ${checks.internalTemplateOk ? "ok" : "error"}">${checks.internalTemplateOk ? "OK" : "ERRO"} · template interno</span>
@@ -2307,7 +2320,7 @@ function renderSiteLeadRoutes() {
               </label>
               <label class="edit-field">
                 Telefone cliente
-                <input name="lead_phone_number" required inputmode="tel" placeholder="Ex.: 5511999999999" />
+                <input name="lead_phone_number" inputmode="tel" placeholder="Ex.: 5511999999999" />
               </label>
               <label class="edit-field">
                 Grupo mensagem interna
@@ -2627,7 +2640,7 @@ async function submitNewMetaClient(ev) {
   form.reset();
   const en = form.querySelector('[name="enabled"]');
   if (en && "checked" in en) en.checked = true;
-  populateLeadTemplateSelect(document.getElementById("newClientLeadTemplate"), "default");
+  populateLeadTemplateSelect(document.getElementById("newClientLeadTemplate"), "");
   setupChipFields(form, ["lead_exclude_fields", "lead_exclude_contains", "lead_exclude_regex"]);
   syncCatalogGroupSelects();
   syncMetaCatalogSelects();
@@ -3010,7 +3023,7 @@ function syncCatalogGroupSelects() {
     sel.replaceChildren();
     const ph = document.createElement("option");
     ph.value = "";
-    ph.textContent = optional ? "Nenhum" : "— Escolher do catálogo —";
+    ph.textContent = "Nenhum";
     sel.appendChild(ph);
     optionsSource.forEach((g) => {
       const jid = (g.group_jid || "").trim();

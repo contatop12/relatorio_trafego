@@ -973,32 +973,17 @@ def api_clients() -> Any:
 def api_add_client() -> Any:
     payload = request.get_json(silent=True) or {}
 
-    client_name = str(payload.get("client_name", "")).strip()
+    client_name = str(payload.get("client_name", "")).strip() or "Cliente sem nome"
     ad_account_id = _normalize_act_id(str(payload.get("ad_account_id", "")).strip())
     group_id = str(payload.get("group_id", "")).strip()
     meta_page_id = str(payload.get("meta_page_id", "")).strip()
     lead_group_id = group_id
     lead_phone_number = str(payload.get("lead_phone_number", "")).strip()
-    lead_template = str(payload.get("lead_template", "default")).strip() or "default"
+    lead_template = str(payload.get("lead_template", "") or "default").strip() or "default"
     lead_exclude_fields = _csv_list(payload.get("lead_exclude_fields"))
     lead_exclude_contains = _csv_list(payload.get("lead_exclude_contains"))
     lead_exclude_regex = _csv_list(payload.get("lead_exclude_regex"))
     enabled = _as_bool(payload.get("enabled"), default=True)
-
-    if not client_name:
-        return jsonify({"ok": False, "error": "client_name_obrigatorio"}), 400
-    if not ad_account_id:
-        return jsonify({"ok": False, "error": "ad_account_id_obrigatorio"}), 400
-    if not group_id:
-        return jsonify({"ok": False, "error": "group_id_obrigatorio"}), 400
-    if not str(payload.get("lead_phone_number", "")).strip():
-        return jsonify({"ok": False, "error": "telefone_cliente_obrigatorio"}), 400
-    if not str(payload.get("internal_notify_group_id", "")).strip():
-        return jsonify({"ok": False, "error": "internal_notify_group_id_obrigatorio"}), 400
-    if not lead_phone_number:
-        return jsonify({"ok": False, "error": "telefone_cliente_obrigatorio"}), 400
-    if not str(payload.get("internal_notify_group_id", "")).strip():
-        return jsonify({"ok": False, "error": "internal_notify_group_id_obrigatorio"}), 400
 
     new_client = {
         "client_name": client_name,
@@ -1091,15 +1076,8 @@ def api_update_client(client_id: int) -> Any:
             current[key] = _csv_list(payload[key])
         else:
             current[key] = str(payload[key]).strip()
-    if not str(current.get("lead_phone_number", "")).strip():
-        return jsonify({"ok": False, "error": "telefone_cliente_obrigatorio"}), 400
-    if not str(current.get("internal_notify_group_id", "")).strip():
-        return jsonify({"ok": False, "error": "internal_notify_group_id_obrigatorio"}), 400
     current["lead_group_id"] = str(current.get("group_id", "")).strip()
-    if not str(current.get("lead_phone_number", "")).strip():
-        return jsonify({"ok": False, "error": "telefone_cliente_obrigatorio"}), 400
-    if not str(current.get("internal_notify_group_id", "")).strip():
-        return jsonify({"ok": False, "error": "internal_notify_group_id_obrigatorio"}), 400
+    current["lead_template"] = str(current.get("lead_template", "") or "default").strip() or "default"
 
     if persistence.db_enabled():
         persistence.update_meta_client(client_id, current)
@@ -1132,7 +1110,7 @@ def api_google_clients() -> Any:
 @app.post("/api/google-clients")
 def api_add_google_client() -> Any:
     payload = request.get_json(silent=True) or {}
-    client_name = str(payload.get("client_name", "")).strip()
+    client_name = str(payload.get("client_name", "")).strip() or "Cliente Google sem nome"
     google_customer_id = _normalize_google_customer_id(str(payload.get("google_customer_id", "")).strip())
     group_id = str(payload.get("group_id", "")).strip()
     notes = str(payload.get("notes", "")).strip()
@@ -1145,13 +1123,6 @@ def api_add_google_client() -> Any:
         primary_conversions = [str(x).strip() for x in primary if str(x).strip()]
     else:
         primary_conversions = []
-
-    if not client_name:
-        return jsonify({"ok": False, "error": "client_name_obrigatorio"}), 400
-    if not google_customer_id:
-        return jsonify({"ok": False, "error": "google_customer_id_obrigatorio"}), 400
-    if not group_id:
-        return jsonify({"ok": False, "error": "group_id_obrigatorio"}), 400
 
     new_client = {
         "client_name": client_name,
@@ -1299,12 +1270,6 @@ def api_add_site_lead_route() -> Any:
         return jsonify({"ok": False, "error": "codi_id_invalido_formato"}), 400
     if route_data["target_type"] not in {"meta", "google", "site"}:
         return jsonify({"ok": False, "error": "target_type_invalido"}), 400
-    if not route_data["group_id"]:
-        return jsonify({"ok": False, "error": "group_id_obrigatorio"}), 400
-    if not route_data["lead_phone_number"]:
-        return jsonify({"ok": False, "error": "telefone_cliente_obrigatorio"}), 400
-    if not route_data["internal_notify_group_id"]:
-        return jsonify({"ok": False, "error": "internal_notify_group_id_obrigatorio"}), 400
     try:
         if persistence.db_enabled():
             persistence.ensure_db_ready()
@@ -1386,13 +1351,7 @@ def api_update_site_lead_route(route_id: int) -> Any:
         return jsonify({"ok": False, "error": "codi_id_invalido_formato"}), 400
     if str(current.get("target_type", "")).strip() not in {"meta", "google", "site"}:
         return jsonify({"ok": False, "error": "target_type_invalido"}), 400
-    if not str(current.get("group_id", "")).strip():
-        return jsonify({"ok": False, "error": "group_id_obrigatorio"}), 400
     current["lead_group_id"] = str(current.get("group_id", "")).strip()
-    if not str(current.get("lead_phone_number", "")).strip():
-        return jsonify({"ok": False, "error": "telefone_cliente_obrigatorio"}), 400
-    if not str(current.get("internal_notify_group_id", "")).strip():
-        return jsonify({"ok": False, "error": "internal_notify_group_id_obrigatorio"}), 400
     try:
         if persistence.db_enabled():
             persistence.update_site_lead_route(route_id, current)

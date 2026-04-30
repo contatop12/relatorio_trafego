@@ -74,19 +74,19 @@
             <div class="new-client-fields" aria-label="Dados do cliente">
               <label>
                 Nome do cliente
-                <input name="client_name" required placeholder="Ex.: Lorena Carvalho" />
+                <input name="client_name" placeholder="Ex.: Lorena Carvalho" />
               </label>
               <label>
                 Conta Meta
-                <select name="ad_account_id" class="field-select meta-catalog-account-select" required>
+                <select name="ad_account_id" class="field-select meta-catalog-account-select">
                   <option value="">Carregando catálogo…</option>
                 </select>
                 <span class="field-hint">Contas do Business (API) + contas já cadastradas.</span>
               </label>
               <label>
                 Grupo relatório
-                <select name="group_id" class="field-select catalog-group-select" required data-catalog-optional="0">
-                  <option value="">— Escolher do catálogo —</option>
+                <select name="group_id" class="field-select catalog-group-select" data-catalog-optional="0">
+                  <option value="">Nenhum</option>
                 </select>
                 <span class="field-hint">Lista da aba Grupos WhatsApp (webhook Evolution).</span>
               </label>
@@ -99,7 +99,7 @@
               </label>
               <label>
                 Telefone cliente
-                <input name="lead_phone_number" required inputmode="tel" placeholder="Ex.: 5511999999999" />
+                <input name="lead_phone_number" inputmode="tel" placeholder="Ex.: 5511999999999" />
                 <span class="field-hint">Número do cliente para fluxos com envio extra, quando aplicável.</span>
               </label>
               <label>
@@ -124,8 +124,8 @@
               </label>
               <label>
                 Grupo mensagem interna
-                <select name="internal_notify_group_id" class="field-select catalog-group-select" required data-catalog-optional="0">
-                  <option value="">— Escolher do catálogo —</option>
+                <select name="internal_notify_group_id" class="field-select catalog-group-select" data-catalog-optional="0">
+                  <option value="">Nenhum</option>
                 </select>
                 <span class="field-hint">Cópia opcional; o texto vem dos templates do canal <code>internal_lead</code> / <code>internal_report</code>.</span>
               </label>
@@ -151,13 +151,8 @@
               </label>
               <label class="new-client-field-template">
                 Template lead
-                <select
-                  name="lead_template"
-                  id="newClientLeadTemplate"
-                  class="field-select lead-template-select"
-                  required
-                >
-                  <option value="default">Carregando…</option>
+                <select name="lead_template" id="newClientLeadTemplate" class="field-select lead-template-select">
+                  <option value="">Nenhum</option>
                 </select>
                 <span class="field-hint">Integrados ou templates criados na aba Templates.</span>
               </label>
@@ -259,16 +254,16 @@
             <div class="new-client-fields" aria-label="Dados do cliente Google">
               <label>
                 Nome do cliente
-                <input name="client_name" required placeholder="Ex.: Practical Life Jardim Prudencia" />
+                <input name="client_name" placeholder="Ex.: Practical Life Jardim Prudencia" />
               </label>
               <label>
                 Google customer id
-                <input name="google_customer_id" required placeholder="253-906-3374" />
+                <input name="google_customer_id" placeholder="253-906-3374" />
               </label>
               <label>
                 Grupo WhatsApp
-                <select name="group_id" class="field-select catalog-group-select" required data-catalog-optional="0">
-                  <option value="">— Escolher do catálogo —</option>
+                <select name="group_id" class="field-select catalog-group-select" data-catalog-optional="0">
+                  <option value="">Nenhum</option>
                 </select>
                 <span class="field-hint">Lista da aba Grupos WhatsApp.</span>
               </label>
@@ -278,7 +273,7 @@
               </label>
               <label>
                 Telefone cliente
-                <input name="lead_phone_number" required inputmode="tel" placeholder="Ex.: 5511999999999" />
+                <input name="lead_phone_number" inputmode="tel" placeholder="Ex.: 5511999999999" />
               </label>
               <label>
                 Grupo P12 relatório
@@ -302,8 +297,8 @@
               </label>
               <label>
                 Grupo mensagem interna
-                <select name="internal_notify_group_id" class="field-select catalog-group-select" required data-catalog-optional="0">
-                  <option value="">— Escolher do catálogo —</option>
+                <select name="internal_notify_group_id" class="field-select catalog-group-select" data-catalog-optional="0">
+                  <option value="">Nenhum</option>
                 </select>
                 <span class="field-hint">Aviso após envio do relatório; conteúdo no template <code>internal_report</code>.</span>
               </label>
@@ -752,27 +747,27 @@
               </label>
               <label>
                 Grupo cliente
-                <select name="group_id" class="field-select catalog-group-select" required data-catalog-optional="0">
-                  <option value="">— Escolher do catálogo —</option>
+                <select name="group_id" class="field-select catalog-group-select" data-catalog-optional="0">
+                  <option value="">Nenhum</option>
                 </select>
                 <span class="field-hint">Grupo do cliente que vai receber a mensagem de novo lead do site.</span>
               </label>
               <label>
                 Telefone cliente
-                <input name="lead_phone_number" required inputmode="tel" placeholder="Ex.: 5511999999999" />
+                <input name="lead_phone_number" inputmode="tel" placeholder="Ex.: 5511999999999" />
                 <span class="field-hint">Telefone do cliente para fluxos com envio extra, quando aplicável.</span>
               </label>
               <label>
                 Grupo mensagem interna
-                <select name="internal_notify_group_id" class="field-select catalog-group-select" required data-catalog-optional="0">
-                  <option value="">— Escolher do catálogo —</option>
+                <select name="internal_notify_group_id" class="field-select catalog-group-select" data-catalog-optional="0">
+                  <option value="">Nenhum</option>
                 </select>
                 <span class="field-hint">Cópia para time interno no recebimento de lead.</span>
               </label>
               <label>
                 Template de mensagem
                 <select name="lead_template" class="field-select lead-template-select">
-                  <option value="default">Carregando…</option>
+                  <option value="">Nenhum</option>
                 </select>
                 <span class="field-hint">Canal <code>site_lead</code> da aba Templates.</span>
               </label>
@@ -1013,18 +1008,18 @@
             <div class="edit-field-grid">
               <label class="edit-field">
                 Nome
-                <input name="client_name" required autocomplete="organization" />
+                <input name="client_name" autocomplete="organization" />
               </label>
               <label class="edit-field">
                 Conta Meta
-                <select name="ad_account_id" class="field-select meta-catalog-account-select" required>
+                <select name="ad_account_id" class="field-select meta-catalog-account-select">
                   <option value="">Carregando catálogo…</option>
                 </select>
               </label>
               <label class="edit-field">
                 Grupo relatório
-                <select name="group_id" class="field-select catalog-group-select" required data-catalog-optional="0">
-                  <option value="">— Escolher do catálogo —</option>
+                <select name="group_id" class="field-select catalog-group-select" data-catalog-optional="0">
+                  <option value="">Nenhum</option>
                 </select>
               </label>
               <label class="edit-field">
@@ -1035,7 +1030,7 @@
               </label>
               <label class="edit-field">
                 Telefone cliente
-                <input name="lead_phone_number" required inputmode="tel" placeholder="Ex.: 5511999999999" />
+                <input name="lead_phone_number" inputmode="tel" placeholder="Ex.: 5511999999999" />
               </label>
               <label class="edit-field">
                 Grupo P12 relatório
@@ -1055,8 +1050,8 @@
               </label>
               <label class="edit-field">
                 Grupo mensagem interna
-                <select name="internal_notify_group_id" class="field-select catalog-group-select" required data-catalog-optional="0">
-                  <option value="">— Escolher do catálogo —</option>
+                <select name="internal_notify_group_id" class="field-select catalog-group-select" data-catalog-optional="0">
+                  <option value="">Nenhum</option>
                 </select>
               </label>
               <label class="edit-field">
@@ -1079,7 +1074,7 @@
               </label>
               <label class="edit-field edit-field--full">
                 Template lead
-                <select name="lead_template" class="field-select lead-template-select" required></select>
+                <select name="lead_template" class="field-select lead-template-select"></select>
                 <span class="field-hint">Padrão integrado ou template personalizado da aba Templates.</span>
               </label>
             </div>
@@ -1216,16 +1211,16 @@
             <div class="edit-field-grid">
               <label class="edit-field">
                 Nome
-                <input name="client_name" required />
+                <input name="client_name" />
               </label>
               <label class="edit-field">
                 Customer ID
-                <input name="google_customer_id" required />
+                <input name="google_customer_id" />
               </label>
               <label class="edit-field">
                 Grupo
-                <select name="group_id" class="field-select catalog-group-select" required data-catalog-optional="0">
-                  <option value="">— Escolher do catálogo —</option>
+                <select name="group_id" class="field-select catalog-group-select" data-catalog-optional="0">
+                  <option value="">Nenhum</option>
                 </select>
               </label>
               <label class="edit-field">
@@ -1234,7 +1229,7 @@
               </label>
               <label class="edit-field">
                 Telefone cliente
-                <input name="lead_phone_number" required inputmode="tel" placeholder="Ex.: 5511999999999" />
+                <input name="lead_phone_number" inputmode="tel" placeholder="Ex.: 5511999999999" />
               </label>
               <label class="edit-field">
                 Grupo P12 relatório
@@ -1256,8 +1251,8 @@
               </label>
               <label class="edit-field">
                 Grupo mensagem interna
-                <select name="internal_notify_group_id" class="field-select catalog-group-select" required data-catalog-optional="0">
-                  <option value="">— Escolher do catálogo —</option>
+                <select name="internal_notify_group_id" class="field-select catalog-group-select" data-catalog-optional="0">
+                  <option value="">Nenhum</option>
                 </select>
               </label>
               <label class="edit-field">
