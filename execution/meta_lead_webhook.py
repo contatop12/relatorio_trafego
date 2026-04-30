@@ -476,11 +476,41 @@ def _unwrap_evolution_style_envelope(d: Dict[str, Any]) -> Optional[Any]:
     if "data" not in d:
         return None
     keys_l = {str(k).strip().lower() for k in d.keys()}
-    if len(keys_l & _EVOLUTION_ENVELOPE_MARKERS) < 2:
+    # Pelo menos 2 marcas OU o par típico event+instance (webhook Evolution)
+    if len(keys_l & _EVOLUTION_ENVELOPE_MARKERS) < 2 and not (
+        "event" in keys_l and "instance" in keys_l
+    ):
         return None
     inner = d.get("data")
     inner = _unwrap_json_strings(inner) if isinstance(inner, str) else inner
     return inner
+
+
+def _looks_like_evolution_whatsapp_event(inner: Any) -> bool:
+    """
+    True se `data` do envelope Evolution é evento de chat/grupo (Baileys), não um lead.
+    Evita 400 quando o URL do Make aponta /meta-new-lead em vez de /evolution-webhook.
+    """
+    if isinstance(inner, list):
+        if not inner:
+            return False
+        sample = [x for x in inner[:5] if isinstance(x, dict)]
+        return bool(sample) and all(_looks_like_evolution_whatsapp_event(x) for x in sample)
+    if not isinstance(inner, dict):
+        return False
+    lk = {str(k).strip().lower() for k in inner.keys()}
+    if "messages" in lk and isinstance(inner.get("messages"), list):
+        return True
+    if "key" in lk and "message" in lk:
+        return True
+    if inner.get("message") is not None and inner.get("key") is not None:
+        return True
+    ev = str(inner.get("event") or inner.get("type") or "").lower()
+    if ev.startswith("messages.") or ev.startswith("chats.") or ev.startswith("contacts."):
+        return True
+    if ev in ("presence.update", "groups.update", "group-participants.update"):
+        return True
+    return False
 
 
 def _coerce_inner_body(val: Any) -> Optional[Dict[str, Any]]:
@@ -1585,6 +1615,47 @@ def _handle_meta_new_lead(endpoint_label: str, allow_legacy_lorena_fallback: boo
     if not events:
         if raw in ({}, []):
             return jsonify({"ok": True, "ignored": True, "reason": "empty_payload"}), 200
+        if isinstance(raw, dict):
+            uw = _unwrap_evolution_style_envelope(raw)
+            if uw is not None:
+                if _looks_like_evolution_whatsapp_event(uw):
+                    _wh_log(
+                        f"POST {endpoint_label} | IGNORADO | canal=leads_meta | cod=EVOLUTION_EVENTO_NAO_E_LEAD | "
+                        f"envelope Evolution com evento WhatsApp/grupo em data (nao e lead Meta). "
+                        f"Catalogo Evolution: POST /evolution-webhook",
+                        level=logging.INFO,
+                    )
+                    _emit_runtime_event(
+                        stage="IGNORADO",
+                        status="info",
+                        detail=f"{endpoint_label}: evento Evolution/WhatsApp, nao lead",
+                        payload={
+                            "endpoint": endpoint_label,
+                            "cod": "EVOLUTION_EVENTO_NAO_E_LEAD",
+                        },
+                    )
+                    return (
+                        jsonify(
+                            {
+                                "ok": True,
+                                "ignored": True,
+                                "reason": "evolution_whatsapp_event",
+                                "hint": "Este URL e para leads (Meta/Make). Eventos de mensagem/grupo da Evolution "
+                                "devem ir para POST /evolution-webhook.",
+                            }
+                        ),
+                        200,
+                    )
+                u_sample = (
+                    list(uw.keys())[:24]
+                    if isinstance(uw, dict)
+                    else type(uw).__name__
+                )
+                _wh_log(
+                    f"POST {endpoint_label} | AVISO | canal=leads_meta | cod=ENVELOPE_SEM_LEAD_RECONHECIDO | "
+                    f"inner_tipo={type(uw).__name__} inner_keys_sample={u_sample!r}",
+                    level=logging.WARNING,
+                )
         _wh_log(
             f"POST {endpoint_label} | ERRO_LEAD | canal=leads_meta | cod=PAYLOAD_SEM_LEAD_RECONHECIDO | "
             f"{_payload_shape_hint_lead(raw)} | "

@@ -6,7 +6,10 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from execution.meta_lead_webhook import normalize_lead_events
+from execution.meta_lead_webhook import (
+    _looks_like_evolution_whatsapp_event,
+    normalize_lead_events,
+)
 
 
 class TestEvolutionEnvelope(unittest.TestCase):
@@ -48,6 +51,30 @@ class TestEvolutionEnvelope(unittest.TestCase):
         from execution.meta_lead_webhook import _is_meta_lead_body
 
         self.assertTrue(_is_meta_lead_body(raw))
+
+    def test_whatsapp_event_shape_detected(self) -> None:
+        self.assertTrue(
+            _looks_like_evolution_whatsapp_event(
+                {"key": {"remoteJid": "g@g.us"}, "message": {"conversation": "hi"}}
+            )
+        )
+        self.assertTrue(
+            _looks_like_evolution_whatsapp_event({"messages": [{"key": {}, "message": {}}]})
+        )
+        self.assertFalse(
+            _looks_like_evolution_whatsapp_event(
+                {"nome": "x", "telefone": "5511999999999", "codi_id": "a" * 32}
+            )
+        )
+
+    def test_envelope_with_only_event_instance_still_unwraps(self) -> None:
+        raw = {
+            "event": "messages.upsert",
+            "instance": "inst",
+            "data": {"key": {}, "message": {}},
+        }
+        events = normalize_lead_events(raw)
+        self.assertEqual(len(events), 0)
 
 
 if __name__ == "__main__":
