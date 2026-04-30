@@ -112,6 +112,57 @@ def _unhandled_exception_for_api(e: Exception) -> Any:
 _CLIENTS_LOCK = threading.Lock()
 _GOOGLE_CLIENTS_LOCK = threading.Lock()
 _SITE_ROUTES_LOCK = threading.Lock()
+_META_CATALOG_CACHE_LOCK = threading.Lock()
+_META_CATALOG_FETCH_LOCKS: Dict[str, threading.Lock] = {
+    "ad_accounts": threading.Lock(),
+    "pages": threading.Lock(),
+}
+_META_CATALOG_API_CACHE: Dict[str, Dict[str, Any]] = {
+    "ad_accounts": {},
+    "pages": {},
+}
+
+
+def _meta_catalog_cache_ttl_seconds() -> int:
+    raw = str(os.getenv("META_CATALOG_CACHE_TTL_SECONDS", "30") or "30").strip()
+    try:
+        v = int(raw)
+    except Exception:
+        v = 30
+    return max(0, min(v, 600))
+
+
+def _meta_catalog_api_cache_get(kind: str, token: str, bid: str) -> Optional[Dict[str, Any]]:
+    ttl = _meta_catalog_cache_ttl_seconds()
+    if ttl <= 0:
+        return None
+    now = time.time()
+    with _META_CATALOG_CACHE_LOCK:
+        ent = _META_CATALOG_API_CACHE.get(kind) or {}
+        exp = float(ent.get("exp_ts") or 0.0)
+        if exp <= now:
+            return None
+        if str(ent.get("token") or "") != token or str(ent.get("bid") or "") != bid:
+            return None
+        out = {
+            "from_api": [dict(x) for x in ent.get("from_api", []) if isinstance(x, dict)],
+            "warnings": [str(x) for x in ent.get("warnings", []) if str(x).strip()],
+        }
+    return out
+
+
+def _meta_catalog_api_cache_put(kind: str, token: str, bid: str, from_api: List[Dict[str, str]], warnings: List[str]) -> None:
+    ttl = _meta_catalog_cache_ttl_seconds()
+    if ttl <= 0:
+        return
+    with _META_CATALOG_CACHE_LOCK:
+        _META_CATALOG_API_CACHE[kind] = {
+            "token": token,
+            "bid": bid,
+            "exp_ts": time.time() + ttl,
+            "from_api": [dict(x) for x in from_api if isinstance(x, dict)],
+            "warnings": [str(x) for x in warnings if str(x).strip()],
+        }
 
 
 def _clients_path() -> str:
@@ -863,21 +914,29 @@ def meta_catalog_ad_accounts_payload() -> Dict[str, Any]:
     from_api: List[Dict[str, str]] = []
 
     if api_attempted:
-        try:
-            raw = list_business_ad_accounts(token, bid, max_retries=2)
-            for acc in raw:
-                aid_raw = acc.get("id") or acc.get("account_id")
-                if not aid_raw:
-                    continue
-                aid = _normalize_act_id(str(aid_raw).strip())
-                if not re.fullmatch(r"act_\d{6,}", aid):
-                    continue
-                name = str(acc.get("name") or "").strip() or aid
-                from_api.append({"id": aid, "label": f"{name} — {aid}"})
-        except MetaAPIAuthError as e:
-            warnings.append(f"Meta API (autenticação): {e!s}")
-        except Exception as e:
-            warnings.append(f"Meta API (contas): {e!s}")
+        lock = _META_CATALOG_FETCH_LOCKS["ad_accounts"]
+        with lock:
+            cached = _meta_catalog_api_cache_get("ad_accounts", token, bid)
+            if cached is not None:
+                from_api = cached["from_api"]
+                warnings.extend(cached["warnings"])
+            else:
+                try:
+                    raw = list_business_ad_accounts(token, bid, max_retries=2)
+                    for acc in raw:
+                        aid_raw = acc.get("id") or acc.get("account_id")
+                        if not aid_raw:
+                            continue
+                        aid = _normalize_act_id(str(aid_raw).strip())
+                        if not re.fullmatch(r"act_\d{6,}", aid):
+                            continue
+                        name = str(acc.get("name") or "").strip() or aid
+                        from_api.append({"id": aid, "label": f"{name} — {aid}"})
+                except MetaAPIAuthError as e:
+                    warnings.append(f"Meta API (autenticação): {e!s}")
+                except Exception as e:
+                    warnings.append(f"Meta API (contas): {e!s}")
+                _meta_catalog_api_cache_put("ad_accounts", token, bid, from_api, warnings)
     else:
         if not token:
             warnings.append("META_ACCESS_TOKEN ausente: usando só contas já cadastradas nos clientes.")
@@ -912,18 +971,26 @@ def meta_catalog_pages_payload() -> Dict[str, Any]:
     from_api: List[Dict[str, str]] = []
 
     if api_attempted:
-        try:
-            raw = list_business_pages(token, bid, max_retries=2)
-            for p in raw:
-                pid = str(p.get("id") or "").strip()
-                if not pid.isdigit():
-                    continue
-                name = str(p.get("name") or "").strip() or pid
-                from_api.append({"id": pid, "label": f"{name} — {pid}"})
-        except MetaAPIAuthError as e:
-            warnings.append(f"Meta API (autenticação): {e!s}")
-        except Exception as e:
-            warnings.append(f"Meta API (páginas): {e!s}")
+        lock = _META_CATALOG_FETCH_LOCKS["pages"]
+        with lock:
+            cached = _meta_catalog_api_cache_get("pages", token, bid)
+            if cached is not None:
+                from_api = cached["from_api"]
+                warnings.extend(cached["warnings"])
+            else:
+                try:
+                    raw = list_business_pages(token, bid, max_retries=2)
+                    for p in raw:
+                        pid = str(p.get("id") or "").strip()
+                        if not pid.isdigit():
+                            continue
+                        name = str(p.get("name") or "").strip() or pid
+                        from_api.append({"id": pid, "label": f"{name} — {pid}"})
+                except MetaAPIAuthError as e:
+                    warnings.append(f"Meta API (autenticação): {e!s}")
+                except Exception as e:
+                    warnings.append(f"Meta API (páginas): {e!s}")
+                _meta_catalog_api_cache_put("pages", token, bid, from_api, warnings)
     else:
         if not token:
             warnings.append("META_ACCESS_TOKEN ausente: usando só páginas já cadastradas nos clientes.")
